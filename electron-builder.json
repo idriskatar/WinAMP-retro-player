@@ -34,17 +34,17 @@
   "mac": {
     "target": [
       {
-        "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "target": "dmg"
       },
       {
-        "target": "zip",
-        "arch": ["x64", "arm64"]
+        "target": "zip"
       }
     ],
     "identity": null,
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
     "category": "public.app-category.music",
-    "icon": "public/icon.png"
+    "icon": "public/icon.icns"
   },
   "linux": {
     "target": [
@@ -57,7 +57,7 @@
         "arch": ["x64"]
       }
     ],
-    "category": "Audio;AudioVideo;Player;",
+    "category": "AudioVideo",
     "icon": "public/icon.png"
   }
 }
