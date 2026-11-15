@@ -23,7 +23,7 @@ jobs:
             platform: win
           - os: macos-latest
             platform: mac
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             platform: linux
 
     steps:
@@ -38,6 +38,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install Linux FUSE (for AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64 || true
+
       - name: Build frontend
         run: npm run build
 
@@ -46,6 +52,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          APPIMAGE_EXTRACT_AND_RUN: 1
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
