@@ -5,11 +5,25 @@
   "main": "electron/main.js",
   "author": "Idris Katar <idriskatar@gmail.com>",
   "license": "MIT",
+  "private": true,
+  "homepage": "https://github.com/idriskatar/WinAMP-retro-player#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/idriskatar/WinAMP-retro-player.git"
+  },
+  "bugs": {
+    "url": "https://github.com/idriskatar/WinAMP-retro-player/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "electron:dev": "vite",
+    "start": "electron .",
+    "electron:dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on tcp:3000 && cross-env VITE_DEV_SERVER_URL=http://localhost:3000 electron .\"",
     "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
@@ -22,11 +36,14 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "typescript": "^5.9.3",
+    "vite": "^5.4.11",
+    "wait-on": "^9.5.1"
   }
 }

@@ -1,14 +1,46 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  Tray,
+  Menu,
+  nativeImage,
+  ipcMain,
+} = require('electron');
 const path = require('path');
 
 let mainWindow = null;
 let tray = null;
+let trayAvailable = false;
+let isQuitting = false;
+
+/**
+ * Dev: use the icon from the repository. Packaged: electron-builder copies the
+ * icons next to the executable through `extraResources`, so the tray and window
+ * icons keep working outside the asar archive.
+ */
+function getIconPath() {
+  const fileName = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  if (app.isPackaged) return path.join(process.resourcesPath, fileName);
+  return path.join(__dirname, '..', 'build', fileName);
+}
+
+function sendMediaCommand(channel) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(channel);
+}
+
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
 function createWindow() {
-  const iconPath = process.platform === 'win32'
-    ? path.join(__dirname, '../build/icon.ico')
-    : path.join(__dirname, '../build/icon.png');
-
   mainWindow = new BrowserWindow({
     width: 610,
     height: 380,
@@ -16,12 +48,11 @@ function createWindow() {
     minHeight: 160,
     backgroundColor: '#111215',
     title: 'WinAMP 2.9x Retro Player',
-    icon: iconPath,
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false, // Allows loading local audio files via file://
     },
     autoHideMenuBar: true,
   });
@@ -33,85 +64,142 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // F12 or Ctrl+Shift+I: Open DevTools for debugging if needed
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
-      mainWindow?.webContents.toggleDevTools();
+  // DevTools only in development builds.
+  if (!app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+        mainWindow?.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+    });
+  }
+
+  // External windows are not part of this app.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Closing the window hides it to the tray (the tray "Çıkış" item quits).
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && trayAvailable) {
       event.preventDefault();
+      mainWindow.hide();
     }
   });
-
-  // Register Global Hotkeys
-  try {
-    globalShortcut.register('MediaPlayPause', () => {
-      mainWindow?.webContents.send('media-play-pause');
-    });
-    globalShortcut.register('MediaNextTrack', () => {
-      mainWindow?.webContents.send('media-next');
-    });
-    globalShortcut.register('MediaPreviousTrack', () => {
-      mainWindow?.webContents.send('media-prev');
-    });
-    globalShortcut.register('MediaStop', () => {
-      mainWindow?.webContents.send('media-stop');
-    });
-  } catch {
-    // Ignore global shortcut errors on environments without media keys
-  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  // Create System Tray Icon
+function createTray() {
   try {
-    const iconPath = process.platform === 'win32'
-      ? path.join(__dirname, '../build/icon.ico')
-      : path.join(__dirname, '../build/icon.png');
+    let icon = nativeImage.createFromPath(getIconPath());
+    if (icon.isEmpty()) throw new Error(`icon not found: ${getIconPath()}`);
+    if (process.platform === 'darwin') {
+      icon = icon.resize({ width: 16, height: 16 });
+    }
 
-    tray = new Tray(iconPath);
+    tray = new Tray(icon);
     const contextMenu = Menu.buildFromTemplate([
       { label: 'WinAMP 2.9x Retro Player', enabled: false },
       { type: 'separator' },
-      { label: 'Oynat / Duraklat', click: () => mainWindow?.webContents.send('media-play-pause') },
-      { label: 'Sonraki Parça', click: () => mainWindow?.webContents.send('media-next') },
-      { label: 'Önceki Parça', click: () => mainWindow?.webContents.send('media-prev') },
+      { label: 'Oynat / Duraklat', click: () => sendMediaCommand('media-play-pause') },
+      { label: 'Durdur', click: () => sendMediaCommand('media-stop') },
+      { label: 'Sonraki Parça', click: () => sendMediaCommand('media-next') },
+      { label: 'Önceki Parça', click: () => sendMediaCommand('media-prev') },
       { type: 'separator' },
-      { label: 'Göster', click: () => mainWindow?.show() },
-      { label: 'Çıkış', click: () => app.quit() },
+      { label: 'Göster', click: showWindow },
+      {
+        label: 'Çıkış',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
     ]);
+
     tray.setToolTip('WinAMP 2.9x Retro Player');
     tray.setContextMenu(contextMenu);
     tray.on('click', () => {
       if (mainWindow?.isVisible()) {
         mainWindow.hide();
       } else {
-        mainWindow?.show();
+        showWindow();
       }
     });
-  } catch {
-    // Tray fallback
+    trayAvailable = true;
+  } catch (error) {
+    trayAvailable = false;
+    console.warn('[tray] System tray is unavailable:', error.message);
   }
+}
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+function registerMediaShortcuts() {
+  const bindings = [
+    ['MediaPlayPause', 'media-play-pause'],
+    ['MediaNextTrack', 'media-next'],
+    ['MediaPreviousTrack', 'media-prev'],
+    ['MediaStop', 'media-stop'],
+  ];
+
+  for (const [accelerator, channel] of bindings) {
+    try {
+      globalShortcut.register(accelerator, () => sendMediaCommand(channel));
+    } catch (error) {
+      console.warn(`[shortcut] ${accelerator} could not be registered:`, error.message);
     }
-  });
+  }
+}
+
+ipcMain.on('window:minimize', () => {
+  mainWindow?.minimize();
 });
 
-app.on('will-quit', () => {
-  try {
-    globalShortcut.unregisterAll();
-  } catch {}
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+ipcMain.on('window:close', () => {
+  if (trayAvailable && mainWindow) {
+    mainWindow.hide();
+  } else {
+    isQuitting = true;
     app.quit();
   }
 });
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', showWindow);
+
+  app.whenReady().then(() => {
+    createWindow();
+    createTray();
+    registerMediaShortcuts();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      } else {
+        showWindow();
+      }
+    });
+  });
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+  });
+
+  app.on('will-quit', () => {
+    try {
+      globalShortcut.unregisterAll();
+    } catch {
+      // Ignore cleanup errors during shutdown.
+    }
+  });
+
+  app.on('window-all-closed', () => {
+    // With a working tray the app keeps running in the background.
+    if (process.platform !== 'darwin' && !trayAvailable) {
+      app.quit();
+    }
+  });
+}

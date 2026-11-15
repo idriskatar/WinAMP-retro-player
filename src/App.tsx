@@ -1,19 +1,53 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MainWindow } from './components/MainWindow/MainWindow';
 import { Equalizer } from './components/Equalizer/Equalizer';
 import { Playlist } from './components/Playlist/Playlist';
 import { AboutModal } from './components/AboutModal/AboutModal';
+import { AddUrlModal } from './components/AddUrlModal/AddUrlModal';
 import { Track, PlaybackState, LayoutMode } from './types/winamp';
 import { audio } from './audio/AudioEngine';
 
 const INITIAL_TRACKS: Track[] = [
-  { id: '1', title: "Whippin The Badass Retro Beat (Winamp 2.9x Classic)", artist: 'DJ Mike Llama', duration: 252 },
+  { id: '1', title: 'Whippin The Badass Retro Beat (Winamp 2.9x Classic)', artist: 'DJ Mike Llama', duration: 252 },
   { id: '2', title: 'Harder Better Faster Stronger', artist: 'Daft Punk', duration: 225 },
   { id: '3', title: 'Breathe (Original 2.9 Mix)', artist: 'The Prodigy', duration: 335 },
   { id: '4', title: 'Sandstorm (Classic 128kbps)', artist: 'Darude', duration: 224 },
   { id: '5', title: '9 PM (Till I Come) Club Mix', artist: 'ATB', duration: 198 },
   { id: '6', title: 'Insomnia (Radio Edit)', artist: 'Faithless', duration: 216 },
 ];
+
+/** Reads a local file's real duration through a temporary <audio> element. */
+const probeDuration = (file: File): Promise<number | null> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const probe = new Audio();
+    let settled = false;
+
+    const finish = (value: number | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      probe.onloadedmetadata = null;
+      probe.onerror = null;
+      probe.removeAttribute('src');
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+
+    const timeoutId = window.setTimeout(() => finish(null), 10000);
+
+    probe.preload = 'metadata';
+    probe.onloadedmetadata = () => {
+      const duration = probe.duration;
+      finish(Number.isFinite(duration) && duration > 0 ? duration : null);
+    };
+    probe.onerror = () => finish(null);
+    probe.src = url;
+  });
+
+const newTrackId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const isDemoSource = (track: Track | null | undefined) => !!track && !track.file && !track.url;
 
 export const App: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
@@ -24,20 +58,23 @@ export const App: React.FC = () => {
   const [isEQVisible, setIsEQVisible] = useState(true);
   const [isPLVisible, setIsPLVisible] = useState(true);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
 
-  // 2x Double-Size scaling mode (Ctrl+D)
+  // 1.5x scaling mode (Ctrl+D)
   const [isDoubleSize, setIsDoubleSize] = useState(false);
 
   // Playlist dynamic dimensions
   const [playlistWidth, setPlaylistWidth] = useState(275);
   const [playlistHeight, setPlaylistHeight] = useState(232);
 
+  const [audioError, setAudioError] = useState<string | null>(null);
+
   // Playback state
   const [playback, setPlayback] = useState<PlaybackState>({
     isPlaying: false,
     isPaused: false,
-    currentTime: 102, // 01:42 demo start
-    duration: 252,
+    currentTime: 0,
+    duration: INITIAL_TRACKS[0]?.duration ?? 0,
     volume: 75,
     balance: 0,
     shuffle: false,
@@ -50,95 +87,59 @@ export const App: React.FC = () => {
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentTrack = tracks[currentTrackIndex] || null;
+  const demoMode = isDemoSource(currentTrack);
 
-  // Handle Playback Loop
-  useEffect(() => {
-    let timer: number;
-    if (playback.isPlaying) {
-      timer = window.setInterval(() => {
-        setPlayback((prev) => {
-          if (prev.currentTime >= prev.duration) {
-            // Next track or loop
-            if (prev.repeat) {
-              return { ...prev, currentTime: 0 };
-            } else {
-              return { ...prev, isPlaying: false, currentTime: 0 };
-            }
-          }
-          return { ...prev, currentTime: prev.currentTime + 1 };
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [playback.isPlaying]);
+  // Refs keep event listeners (keyboard, media keys, audio events) in sync
+  // with the latest render without re-subscribing on every state change.
+  const tracksRef = useRef(tracks);
+  const currentIndexRef = useRef(currentTrackIndex);
+  const playbackRef = useRef(playback);
+  const currentTrackRef = useRef<Track | null>(currentTrack);
 
-  // Global Keyboard Shortcuts (Space, V, Z, B, Ctrl+D)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+  tracksRef.current = tracks;
+  currentIndexRef.current = currentTrackIndex;
+  playbackRef.current = playback;
+  currentTrackRef.current = currentTrack;
 
-      // Ctrl+D: Toggle Double Size
-      if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) {
-        e.preventDefault();
-        setIsDoubleSize((prev) => !prev);
-        return;
-      }
-
-      // Alt+W: Toggle Playlist
-      if (e.altKey && (e.key === 'w' || e.key === 'W')) {
-        e.preventDefault();
-        setIsPLVisible((prev) => !prev);
-        return;
-      }
-
-      // Alt+G: Toggle EQ
-      if (e.altKey && (e.key === 'g' || e.key === 'G')) {
-        e.preventDefault();
-        setIsEQVisible((prev) => !prev);
-        return;
-      }
-
-      switch (e.key) {
-        case ' ': // Space: Play / Pause
-          e.preventDefault();
-          togglePlay();
-          break;
-        case 'v':
-        case 'V': // Stop
-          handleStop();
-          break;
-        case 'z':
-        case 'Z': // Prev
-          handlePrev();
-          break;
-        case 'b':
-        case 'B': // Next
-          handleNext();
-          break;
-        case 'c':
-        case 'C': // Pause
-          handlePause();
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [playback.isPlaying, currentTrackIndex, tracks.length]);
-
-  const togglePlay = () => {
-    if (playback.isPlaying) {
-      handlePause();
+  const loadSource = (track: Track) => {
+    if (track.file) {
+      audio.loadTrack(track.file);
+    } else if (track.url) {
+      audio.loadTrack(track.url);
     } else {
-      handlePlay();
+      // Bundled demo track: no media file, use the built-in synth.
+      audio.loadTrack(null);
+    }
+  };
+
+  const startTrack = (index: number, autoplay = true) => {
+    const track = tracksRef.current[index];
+    if (!track) return;
+
+    currentIndexRef.current = index;
+    setCurrentTrackIndex(index);
+    setAudioError(null);
+    loadSource(track);
+    setPlayback((prev) => ({
+      ...prev,
+      duration: track.duration || 0,
+      currentTime: 0,
+      isPlaying: autoplay,
+      isPaused: false,
+    }));
+
+    if (autoplay) {
+      void audio.play();
+    } else {
+      audio.pause();
     }
   };
 
   const handlePlay = () => {
-    audio.play();
+    if (!currentTrackRef.current) return;
+    setAudioError(null);
     setPlayback((prev) => ({ ...prev, isPlaying: true, isPaused: false }));
+    void audio.play();
   };
 
   const handlePause = () => {
@@ -146,28 +147,83 @@ export const App: React.FC = () => {
     setPlayback((prev) => ({ ...prev, isPlaying: false, isPaused: true }));
   };
 
+  const togglePlay = () => {
+    if (playbackRef.current.isPlaying) {
+      handlePause();
+    } else {
+      handlePlay();
+    }
+  };
+
   const handleStop = () => {
     audio.stop();
     setPlayback((prev) => ({ ...prev, isPlaying: false, isPaused: false, currentTime: 0 }));
   };
 
+  const pickShuffleIndex = (length: number, current: number) => {
+    if (length <= 1) return 0;
+    let next = current;
+    while (next === current) {
+      next = Math.floor(Math.random() * length);
+    }
+    return next;
+  };
+
   const handlePrev = () => {
-    if (tracks.length === 0) return;
-    const nextIdx = (currentTrackIndex - 1 + tracks.length) % tracks.length;
-    setCurrentTrackIndex(nextIdx);
-    selectTrack(tracks[nextIdx]);
+    const list = tracksRef.current;
+    if (!list.length) return;
+    const current = currentIndexRef.current;
+    const previous = playbackRef.current.shuffle
+      ? pickShuffleIndex(list.length, current)
+      : (current - 1 + list.length) % list.length;
+    startTrack(previous);
   };
 
   const handleNext = () => {
-    if (tracks.length === 0) return;
-    const nextIdx = (currentTrackIndex + 1) % tracks.length;
-    setCurrentTrackIndex(nextIdx);
-    selectTrack(tracks[nextIdx]);
+    const list = tracksRef.current;
+    if (!list.length) return;
+    const current = currentIndexRef.current;
+    const next = playbackRef.current.shuffle
+      ? pickShuffleIndex(list.length, current)
+      : (current + 1) % list.length;
+    startTrack(next);
   };
 
+  // Called when a track finishes (real audio `ended` event or demo timer).
+  const handleTrackEnd = () => {
+    const list = tracksRef.current;
+    if (!list.length) return;
+
+    const current = currentIndexRef.current;
+    const { shuffle, repeat } = playbackRef.current;
+
+    let next: number | null = null;
+    if (shuffle && list.length > 1) {
+      next = pickShuffleIndex(list.length, current);
+    } else if (current + 1 < list.length) {
+      next = current + 1;
+    } else if (repeat) {
+      next = 0;
+    }
+
+    if (next === null) {
+      audio.stop();
+      setPlayback((prev) => ({ ...prev, isPlaying: false, isPaused: false, currentTime: 0 }));
+      return;
+    }
+
+    startTrack(next);
+  };
+
+  const handleTrackEndRef = useRef<() => void>(() => {});
+  handleTrackEndRef.current = handleTrackEnd;
+
   const handleSeek = (seconds: number) => {
-    audio.seek(seconds);
-    setPlayback((prev) => ({ ...prev, currentTime: seconds }));
+    const duration = playbackRef.current.duration;
+    if (!duration || duration <= 0) return;
+    const clamped = Math.max(0, Math.min(duration, seconds));
+    audio.seek(clamped);
+    setPlayback((prev) => ({ ...prev, currentTime: clamped }));
   };
 
   const handleVolumeChange = (vol: number) => {
@@ -181,52 +237,254 @@ export const App: React.FC = () => {
   };
 
   const selectTrack = (track: Track) => {
-    const idx = tracks.findIndex((t) => t.id === track.id);
-    if (idx !== -1) setCurrentTrackIndex(idx);
-
-    if (track.file) {
-      audio.loadTrack(track.file);
-    } else if (track.url) {
-      audio.loadTrack(track.url);
-    }
-    setPlayback((prev) => ({
-      ...prev,
-      duration: track.duration,
-      currentTime: 0,
-      isPlaying: true,
-      isPaused: false,
-    }));
-    audio.play();
+    const idx = tracksRef.current.findIndex((t) => t.id === track.id);
+    if (idx !== -1) startTrack(idx);
   };
 
   const handleAddFiles = (fileList: FileList | File[]) => {
-    const newItems: Track[] = Array.from(fileList).map((f, i) => ({
-      id: `${Date.now()}-${i}`,
-      title: f.name.replace(/\.[^/.]+$/, ''),
-      artist: 'Local Artist',
-      duration: 180, // estimated
-      file: f,
+    const files = Array.from(fileList);
+    if (!files.length) return;
+
+    const newItems: Track[] = files.map((file) => ({
+      id: newTrackId(),
+      title: file.name.replace(/\.[^/.]+$/, ''),
+      artist: 'Yerel Dosya',
+      duration: 0,
+      file,
     }));
+
     setTracks((prev) => [...prev, ...newItems]);
+
+    // Fill real durations in the background so the playlist totals are honest.
+    newItems.forEach((item) => {
+      const file = item.file;
+      if (!file) return;
+      void probeDuration(file).then((duration) => {
+        if (!duration) return;
+        setTracks((prev) =>
+          prev.map((track) => (track.id === item.id ? { ...track, duration } : track))
+        );
+      });
+    });
   };
 
   const handleAddUrl = (url: string, title?: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
     const newTrack: Track = {
-      id: `${Date.now()}`,
-      title: title || url,
-      artist: 'Internet Stream',
+      id: newTrackId(),
+      title: title?.trim() || trimmed,
+      artist: 'İnternet Radyosu',
       duration: 0,
-      url,
+      url: trimmed,
     };
     setTracks((prev) => [...prev, newTrack]);
   };
 
   const handleRemoveTrack = (id: string) => {
-    setTracks((prev) => prev.filter((t) => t.id !== id));
+    const list = tracksRef.current;
+    const removedIndex = list.findIndex((t) => t.id === id);
+    if (removedIndex === -1) return;
+
+    const currentIndex = currentIndexRef.current;
+    const wasCurrent = removedIndex === currentIndex;
+    const wasPlaying = playbackRef.current.isPlaying;
+    const remaining = list.filter((t) => t.id !== id);
+
+    tracksRef.current = remaining;
+    setTracks(remaining);
+
+    if (!remaining.length) {
+      audio.stop();
+      audio.loadTrack(null);
+      currentIndexRef.current = 0;
+      setCurrentTrackIndex(0);
+      setPlayback((prev) => ({
+        ...prev,
+        isPlaying: false,
+        isPaused: false,
+        currentTime: 0,
+        duration: 0,
+      }));
+      return;
+    }
+
+    if (wasCurrent) {
+      const nextIndex = Math.min(removedIndex, remaining.length - 1);
+      const nextTrack = remaining[nextIndex];
+      currentIndexRef.current = nextIndex;
+      setCurrentTrackIndex(nextIndex);
+      loadSource(nextTrack);
+      setPlayback((prev) => ({
+        ...prev,
+        currentTime: 0,
+        duration: nextTrack.duration || 0,
+        isPlaying: wasPlaying,
+        isPaused: false,
+      }));
+      if (wasPlaying) {
+        void audio.play();
+      } else {
+        audio.pause();
+      }
+    } else if (removedIndex < currentIndex) {
+      const nextIndex = currentIndex - 1;
+      currentIndexRef.current = nextIndex;
+      setCurrentTrackIndex(nextIndex);
+    }
   };
 
+  // Wire the audio engine events to React state.
+  useEffect(() => {
+    audio.setHandlers({
+      onTimeUpdate: (seconds) => {
+        setPlayback((prev) =>
+          Math.abs(prev.currentTime - seconds) < 0.2 ? prev : { ...prev, currentTime: seconds }
+        );
+      },
+      onDurationChange: (duration) => {
+        setPlayback((prev) =>
+          Math.abs(prev.duration - duration) < 0.01 ? prev : { ...prev, duration }
+        );
+        setTracks((prev) => {
+          const index = currentIndexRef.current;
+          const track = prev[index];
+          if (!track || Math.abs(track.duration - duration) < 0.01) return prev;
+          const next = [...prev];
+          next[index] = { ...track, duration };
+          return next;
+        });
+      },
+      onEnded: () => handleTrackEndRef.current(),
+      onError: (message) => {
+        setAudioError(message);
+        setPlayback((prev) => ({ ...prev, isPlaying: false, isPaused: false }));
+      },
+    });
+  }, []);
+
+  // Demo tracks have no real media file: drive their progress with a timer so
+  // auto-advance / repeat still work.
+  useEffect(() => {
+    if (!playback.isPlaying || !demoMode) return;
+    const timer = window.setInterval(() => {
+      setPlayback((prev) => ({ ...prev, currentTime: prev.currentTime + 1 }));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [playback.isPlaying, demoMode, currentTrack?.id]);
+
+  useEffect(() => {
+    if (!playback.isPlaying || !demoMode) return;
+    if (playback.duration > 0 && playback.currentTime >= playback.duration) {
+      handleTrackEndRef.current();
+    }
+  }, [playback.currentTime, playback.duration, playback.isPlaying, demoMode]);
+
+  // Actions used by the global keyboard shortcuts and the Electron media keys.
+  const actionsRef = useRef({
+    togglePlay,
+    next: handleNext,
+    prev: handlePrev,
+    stop: handleStop,
+    pause: handlePause,
+  });
+  actionsRef.current = {
+    togglePlay,
+    next: handleNext,
+    prev: handlePrev,
+    stop: handleStop,
+    pause: handlePause,
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        setIsDoubleSize((prev) => !prev);
+        return;
+      }
+
+      if (e.altKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        setIsPLVisible((prev) => !prev);
+        return;
+      }
+
+      if (e.altKey && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault();
+        setIsEQVisible((prev) => !prev);
+        return;
+      }
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          actionsRef.current.togglePlay();
+          break;
+        case 'v':
+        case 'V':
+          actionsRef.current.stop();
+          break;
+        case 'z':
+        case 'Z':
+          actionsRef.current.prev();
+          break;
+        case 'b':
+        case 'B':
+          actionsRef.current.next();
+          break;
+        case 'c':
+        case 'C':
+          actionsRef.current.pause();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Electron global media keys and tray menu commands.
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    const unsubscribers = [
+      api.onMediaPlayPause(() => actionsRef.current.togglePlay()),
+      api.onMediaNext(() => actionsRef.current.next()),
+      api.onMediaPrev(() => actionsRef.current.prev()),
+      api.onMediaStop(() => actionsRef.current.stop()),
+    ];
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe?.());
+  }, []);
+
+  // Playlist height follows the main+EQ stack in side-by-side mode.
+  useEffect(() => {
+    if (layoutMode === 'side-by-side') {
+      setPlaylistHeight(isEQVisible ? 232 : 116);
+    }
+  }, [layoutMode, isEQVisible]);
+
+  useEffect(() => {
+    if (!audioError) return;
+    const timer = window.setTimeout(() => setAudioError(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [audioError]);
+
   return (
-    <div className="min-h-screen bg-[#111215] text-[#c2c4cb] p-3 flex flex-col items-center select-none font-sans text-xs">
+    <div
+      className="min-h-screen bg-[#111215] text-[#c2c4cb] p-3 flex flex-col items-center select-none font-sans text-xs"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files?.length) handleAddFiles(e.dataTransfer.files);
+      }}
+    >
       {/* Hidden file input */}
       <input
         ref={hiddenFileInputRef}
@@ -234,10 +492,13 @@ export const App: React.FC = () => {
         multiple
         accept="audio/*"
         className="hidden"
-        onChange={(e) => e.target.files && handleAddFiles(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) handleAddFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
 
-      {/* Top Bar with Branding, Layout Modes & 2x Scaling Toggle */}
+      {/* Top Bar with Branding, Layout Modes & Scaling Toggle */}
       <div className="w-full max-w-4xl flex items-center justify-between pb-2 mb-3 border-b border-[#25272e]">
         <div className="flex items-center gap-2">
           {/* Classic Winamp Lightning Icon */}
@@ -258,19 +519,16 @@ export const App: React.FC = () => {
               </span>
             </h1>
             <p className="text-[11px] text-zinc-400">
-              Windows • macOS • Linux | 0px Manyetik Kenetlenme & Web Audio 10-Bant EQ
+              Windows • macOS • Linux | 0px birleşik yerleşim & Web Audio 10-Bant EQ
             </p>
           </div>
         </div>
 
-        {/* Layout & 2x Controls */}
+        {/* Layout & Scaling Controls */}
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-[#1a1b20] p-0.5 rounded border border-zinc-700 text-xs">
             <button
-              onClick={() => {
-                setLayoutMode('side-by-side');
-                setPlaylistHeight(232);
-              }}
+              onClick={() => setLayoutMode('side-by-side')}
               className={`px-2.5 py-1 rounded font-medium ${
                 layoutMode === 'side-by-side' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'
               }`}
@@ -291,7 +549,7 @@ export const App: React.FC = () => {
             </button>
           </div>
 
-          {/* Double-Size (Ctrl+D) Toggle */}
+          {/* Scaling Toggle */}
           <button
             onClick={() => setIsDoubleSize(!isDoubleSize)}
             className={`px-2 py-1 rounded border text-xs font-mono flex items-center gap-1 ${
@@ -299,12 +557,12 @@ export const App: React.FC = () => {
                 ? 'bg-amber-950 text-amber-300 border-amber-600'
                 : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white'
             }`}
-            title="Double-Size Modu (Ctrl+D)"
+            title="Büyütme Modu (Ctrl+D)"
           >
-            <span>{isDoubleSize ? '2X AKTİF' : '1X (275px)'}</span>
+            <span>{isDoubleSize ? '1.5X AKTİF' : '1X (275px)'}</span>
           </button>
 
-          {/* Quick Play/Stop Button */}
+          {/* Quick Play/Pause Button */}
           <button
             onClick={togglePlay}
             className="px-2.5 py-1 rounded bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-xs flex items-center gap-1 shadow"
@@ -314,7 +572,13 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Workspace Frame (Applies 2x scaling if Double-Size is active) */}
+      {audioError && (
+        <div className="w-full max-w-4xl mb-2 px-2 py-1 rounded border border-red-800 bg-red-950/60 text-red-300 text-[11px] font-mono">
+          ⚠ {audioError}
+        </div>
+      )}
+
+      {/* Main Workspace Frame (Applies scaling if active) */}
       <div
         className="p-4 bg-[#141518] rounded-lg border border-[#26282f] overflow-auto shadow-2xl transition-transform origin-top"
         style={{
@@ -354,14 +618,14 @@ export const App: React.FC = () => {
             {/* 2. Equalizer Window (275x116px) - Sits directly below Main with 0px gap */}
             {isEQVisible && <Equalizer onClose={() => setIsEQVisible(false)} />}
 
-            {/* If in vertical stack mode, Playlist docks right below EQ (or right below Main if EQ closed) */}
+            {/* If in vertical stack mode, Playlist docks right below EQ */}
             {layoutMode === 'vertical-stack' && isPLVisible && (
               <Playlist
                 tracks={tracks}
                 currentTrackId={currentTrack?.id || null}
                 onSelectTrack={selectTrack}
                 onAddTracks={handleAddFiles}
-                onAddUrl={handleAddUrl}
+                onRequestAddUrl={() => setIsUrlModalOpen(true)}
                 onRemoveTrack={handleRemoveTrack}
                 onClose={() => setIsPLVisible(false)}
                 width={playlistWidth}
@@ -374,18 +638,18 @@ export const App: React.FC = () => {
             )}
           </div>
 
-          {/* If in side-by-side mode, Playlist docks immediately to the right with 0px gap! */}
+          {/* If in side-by-side mode, Playlist docks immediately to the right */}
           {layoutMode === 'side-by-side' && isPLVisible && (
             <Playlist
               tracks={tracks}
               currentTrackId={currentTrack?.id || null}
               onSelectTrack={selectTrack}
               onAddTracks={handleAddFiles}
-              onAddUrl={handleAddUrl}
+              onRequestAddUrl={() => setIsUrlModalOpen(true)}
               onRemoveTrack={handleRemoveTrack}
               onClose={() => setIsPLVisible(false)}
               width={playlistWidth}
-              height={isEQVisible ? 232 : 116} // Matches Main+EQ (232px) or Main alone (116px)
+              height={playlistHeight}
               onResize={(w, h) => {
                 setPlaylistWidth(w);
                 setPlaylistHeight(h);
@@ -402,16 +666,25 @@ export const App: React.FC = () => {
           <span className="text-zinc-400 font-bold">Space</span> (Oynat/Duraklat) •{' '}
           <span className="text-zinc-400 font-bold">V</span> (Durdur) •{' '}
           <span className="text-zinc-400 font-bold">Z / B</span> (Önceki/Sonraki) •{' '}
-          <span className="text-zinc-400 font-bold">Ctrl+D</span> (2x Boyut) •{' '}
-          <span className="text-zinc-400 font-bold">Başlığa Çift Tık</span> (Windowshade)
+          <span className="text-zinc-400 font-bold">C</span> (Duraklat) •{' '}
+          <span className="text-zinc-400 font-bold">Alt+G / Alt+W</span> (EQ/PL) •{' '}
+          <span className="text-zinc-400 font-bold">Ctrl+D</span> (1.5x Boyut)
         </div>
         <div>
           <span>WinAMP 2.9x Classic Base Skin Replica</span>
         </div>
       </div>
 
-      {/* About Modal */}
+      {/* Modals */}
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <AddUrlModal
+        isOpen={isUrlModalOpen}
+        onClose={() => setIsUrlModalOpen(false)}
+        onSubmit={(url, title) => {
+          handleAddUrl(url, title);
+          setIsUrlModalOpen(false);
+        }}
+      />
     </div>
   );
 };

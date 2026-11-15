@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Track } from '../../types/winamp';
 
 interface PlaylistProps {
@@ -6,7 +6,7 @@ interface PlaylistProps {
   currentTrackId: string | null;
   onSelectTrack: (track: Track) => void;
   onAddTracks: (files: FileList | File[]) => void;
-  onAddUrl: (url: string, title?: string) => void;
+  onRequestAddUrl: () => void;
   onRemoveTrack: (id: string) => void;
   onClose: () => void;
   width: number;
@@ -14,12 +14,17 @@ interface PlaylistProps {
   onResize: (newWidth: number, newHeight: number) => void;
 }
 
+const MIN_WIDTH = 275;
+const MIN_HEIGHT = 116;
+const MAX_WIDTH = 900;
+const MAX_HEIGHT = 900;
+
 export const Playlist: React.FC<PlaylistProps> = ({
   tracks,
   currentTrackId,
   onSelectTrack,
   onAddTracks,
-  onAddUrl,
+  onRequestAddUrl,
   onRemoveTrack,
   onClose,
   width,
@@ -30,6 +35,13 @@ export const Playlist: React.FC<PlaylistProps> = ({
   const [isShaded, setIsShaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Drop the selection when the selected track is removed.
+  useEffect(() => {
+    if (selectedId && !tracks.some((track) => track.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [tracks, selectedId]);
+
   // Drag-to-resize handle
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,8 +51,8 @@ export const Playlist: React.FC<PlaylistProps> = ({
     const startH = height;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const nextW = Math.max(275, startW + (moveEvent.clientX - startX));
-      const nextH = Math.max(116, startH + (moveEvent.clientY - startY));
+      const nextW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + (moveEvent.clientX - startX)));
+      const nextH = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, startH + (moveEvent.clientY - startY)));
       onResize(nextW, nextH);
     };
 
@@ -69,17 +81,17 @@ export const Playlist: React.FC<PlaylistProps> = ({
     if (e.target.files && e.target.files.length > 0) {
       onAddTracks(e.target.files);
     }
+    e.target.value = '';
   };
 
   const handlePromptAddUrl = () => {
-    const url = window.prompt('İnternet Radyosu / Müzik Akış URL adresi girin: (ör. https://.../stream.mp3)');
-    if (url) {
-      const title = window.prompt('Radyo / Parça Adı:', 'Online Retro Radio');
-      onAddUrl(url, title || undefined);
-    }
+    onRequestAddUrl();
   };
 
-  const formatTrackTime = (seconds: number) => {
+  const formatTrackTime = (seconds: number, isStream = false) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return isStream ? 'LIVE' : '--:--';
+    }
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -94,8 +106,10 @@ export const Playlist: React.FC<PlaylistProps> = ({
       style={{
         width,
         height: isShaded ? 14 : height,
-        minWidth: 275,
-        minHeight: isShaded ? 14 : 116,
+        minWidth: MIN_WIDTH,
+        minHeight: isShaded ? 14 : MIN_HEIGHT,
+        maxWidth: isShaded ? undefined : MAX_WIDTH,
+        maxHeight: isShaded ? undefined : MAX_HEIGHT,
         margin: 0,
         padding: 0,
       }}
@@ -154,7 +168,9 @@ export const Playlist: React.FC<PlaylistProps> = ({
                     <span className="truncate">
                       {idx + 1}. {track.artist ? `${track.artist} - ` : ''}{track.title}
                     </span>
-                    <span className="ml-2 font-mono">{formatTrackTime(track.duration)}</span>
+                    <span className="ml-2 font-mono shrink-0">
+                      {formatTrackTime(track.duration, !!track.url && !track.file)}
+                    </span>
                   </div>
                 );
               })
@@ -191,7 +207,7 @@ export const Playlist: React.FC<PlaylistProps> = ({
 
             <div className="flex items-center gap-1.5 bg-black px-1.5 py-0.5 wa-lcd-box text-emerald-400 text-[8px]">
               <span>{tracks.length} TRK</span>
-              <span>{formatTrackTime(totalDuration)}</span>
+              <span>{totalDuration > 0 ? formatTrackTime(totalDuration) : '00:00'}</span>
             </div>
           </div>
 

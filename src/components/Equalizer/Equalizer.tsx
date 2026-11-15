@@ -15,10 +15,12 @@ const PRESET_MAP: Record<string, number[]> = {
 };
 
 export const Equalizer: React.FC<EqualizerProps> = ({ onClose }) => {
-  const [eqOn, setEqOn] = useState(true);
+  // Restore the engine's persisted mixer state so closing/reopening the EQ
+  // window does not silently reset the audible settings.
+  const [eqOn, setEqOn] = useState(() => audio.getEqEnabled());
   const [autoOn, setAutoOn] = useState(false);
-  const [preamp, setPreamp] = useState(2);
-  const [bands, setBands] = useState<number[]>([4, 2, -1, -3, 0, 3, 5, 4, 2, 1]);
+  const [preamp, setPreamp] = useState(() => audio.getPreamp());
+  const [bands, setBands] = useState<number[]>(() => audio.getBands());
   const [showPresetsMenu, setShowPresetsMenu] = useState(false);
   const [isShaded, setIsShaded] = useState(false);
 
@@ -26,9 +28,10 @@ export const Equalizer: React.FC<EqualizerProps> = ({ onClose }) => {
 
   // Update Web Audio nodes and draw Spline Curve
   useEffect(() => {
-    audio.setPreamp(eqOn ? preamp : 0);
+    audio.setEqEnabled(eqOn);
+    audio.setPreamp(preamp);
     bands.forEach((gain, idx) => {
-      audio.setEQBand(idx, eqOn ? gain : 0);
+      audio.setEQBand(idx, gain);
     });
 
     const canvas = graphCanvasRef.current;

@@ -27,13 +27,22 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.4);
+
+      // Release the temporary context instead of leaking one per click.
+      osc.onended = () => {
+        try {
+          void ctx.close();
+        } catch {
+          // Ignore close errors.
+        }
+      };
     } catch {
       // AudioContext fallback
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="wa-window w-[300px] bg-[#27272b] p-0 flex flex-col justify-between shadow-2xl">
         {/* Titlebar */}
         <div className="wa-titlebar">

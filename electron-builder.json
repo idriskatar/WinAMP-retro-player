@@ -11,6 +11,16 @@
     "electron",
     "package.json"
   ],
+  "extraResources": [
+    {
+      "from": "build/icon.ico",
+      "to": "icon.ico"
+    },
+    {
+      "from": "build/icon.png",
+      "to": "icon.png"
+    }
+  ],
   "win": {
     "target": ["nsis", "portable"],
     "icon": "build/icon.ico"

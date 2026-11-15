@@ -1,6 +1,17 @@
-// Real Web Audio API Engine with 10-Band EQ & 60 FPS Analyser
+// Real Web Audio API Engine with 10-Band EQ, 60 FPS Analyser and
+// HTMLAudioElement lifecycle events (duration / time / ended / error).
 
 export const EQ_FREQUENCIES = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
+
+/** Default boost curve shown by the Equalizer window. */
+export const DEFAULT_EQ_BANDS = [4, 2, -1, -3, 0, 3, 5, 4, 2, 1];
+
+export interface AudioEngineHandlers {
+  onTimeUpdate?: (seconds: number) => void;
+  onDurationChange?: (seconds: number) => void;
+  onEnded?: () => void;
+  onError?: (message: string) => void;
+}
 
 export class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -12,6 +23,19 @@ export class AudioEngine {
   private pannerNode: StereoPannerNode | null = null;
   private analyserNode: AnalyserNode | null = null;
 
+  // Persisted mixer settings so values chosen before playback starts survive
+  // AudioContext creation (and Equalizer re-mounts).
+  private volume = 75;
+  private balance = 0;
+  private preamp = 2;
+  private bands: number[] = [...DEFAULT_EQ_BANDS];
+  private eqEnabled = true;
+
+  // Playback bookkeeping
+  private sourceLoaded = false;
+  private objectUrl: string | null = null;
+  private handlers: AudioEngineHandlers = {};
+
   // Synthetic demo beat oscillator handles
   private isDemoRunning = false;
   private demoInterval: number | null = null;
@@ -20,13 +44,45 @@ export class AudioEngine {
     // Lazy initialize upon first user interaction to comply with browser autoplay policies
   }
 
+  public setHandlers(handlers: AudioEngineHandlers) {
+    this.handlers = handlers;
+  }
+
+  private emitError(message: string) {
+    console.warn('[AudioEngine]', message);
+    this.handlers.onError?.(message);
+  }
+
   private initContext() {
     if (this.ctx) return;
-    const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.ctx = new AudioCtxClass();
+    const AudioCtxClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtxClass) {
+      this.emitError('Web Audio API bu ortamda desteklenmiyor.');
+      return;
+    }
 
-    this.audioElement = new Audio();
-    this.audioElement.crossOrigin = 'anonymous';
+    this.ctx = new AudioCtxClass();
+    const el = new Audio();
+    el.preload = 'metadata';
+    this.audioElement = el;
+
+    el.addEventListener('timeupdate', () => {
+      this.handlers.onTimeUpdate?.(el.currentTime);
+    });
+    el.addEventListener('loadedmetadata', () => this.reportDuration());
+    el.addEventListener('durationchange', () => this.reportDuration());
+    el.addEventListener('ended', () => this.handlers.onEnded?.());
+    el.addEventListener('error', () => {
+      if (!this.sourceLoaded) return;
+      const code = el.error?.code;
+      this.emitError(
+        code === 4
+          ? 'Ses dosyası bulunamadı veya desteklenmeyen bir format.'
+          : 'Ses dosyası yüklenemedi.'
+      );
+    });
 
     this.sourceNode = this.ctx.createMediaElementSource(this.audioElement);
     this.preampGain = this.ctx.createGain();
@@ -68,71 +124,160 @@ export class AudioEngine {
     current.connect(this.masterGain);
     this.masterGain.connect(this.analyserNode);
     this.analyserNode.connect(this.ctx.destination);
+
+    // Apply everything the UI has configured before the graph existed.
+    this.applySettings();
+  }
+
+  private reportDuration() {
+    const el = this.audioElement;
+    if (!el || !this.sourceLoaded) return;
+    const duration = el.duration;
+    if (Number.isFinite(duration) && duration > 0) {
+      this.handlers.onDurationChange?.(duration);
+    }
+  }
+
+  private applySettings() {
+    const now = this.ctx?.currentTime ?? 0;
+
+    if (this.masterGain) {
+      this.masterGain.gain.setValueAtTime(Math.max(0, Math.min(100, this.volume)) / 100, now);
+    }
+
+    if (this.pannerNode) {
+      this.pannerNode.pan.setValueAtTime(Math.max(-50, Math.min(50, this.balance)) / 50, now);
+    }
+
+    if (this.preampGain) {
+      const db = this.eqEnabled ? this.preamp : 0;
+      this.preampGain.gain.setValueAtTime(Math.pow(10, db / 20), now);
+    }
+
+    this.eqFilters.forEach((filter, index) => {
+      filter.gain.setValueAtTime(this.eqEnabled ? this.bands[index] ?? 0 : 0, now);
+    });
   }
 
   public async resumeContext() {
     this.initContext();
     if (this.ctx && this.ctx.state === 'suspended') {
-      await this.ctx.resume();
+      try {
+        await this.ctx.resume();
+      } catch {
+        this.emitError('Ses çıkışı başlatılamadı. Cihazın ses ayarlarını kontrol edin.');
+      }
     }
   }
 
   public setPreamp(db: number) {
-    if (!this.preampGain) return;
-    // convert dB to linear gain
-    const linear = Math.pow(10, db / 20);
-    this.preampGain.gain.setValueAtTime(linear, this.ctx!.currentTime);
+    this.preamp = db;
+    this.applySettings();
   }
 
   public setEQBand(index: number, db: number) {
-    if (!this.eqFilters[index]) return;
-    this.eqFilters[index].gain.setValueAtTime(db, this.ctx!.currentTime);
+    this.bands[index] = db;
+    this.applySettings();
+  }
+
+  public setEqEnabled(enabled: boolean) {
+    this.eqEnabled = enabled;
+    this.applySettings();
   }
 
   public setVolume(volPercent: number) {
-    if (!this.masterGain) return;
-    const clamped = Math.max(0, Math.min(100, volPercent)) / 100;
-    this.masterGain.gain.setValueAtTime(clamped, this.ctx!.currentTime);
+    this.volume = Math.max(0, Math.min(100, volPercent));
+    this.applySettings();
   }
 
   public setBalance(pan: number) {
-    // pan: -50 (Left) to +50 (Right) -> normalize to -1 to +1
-    if (!this.pannerNode) return;
-    const normalized = Math.max(-50, Math.min(50, pan)) / 50;
-    this.pannerNode.pan.setValueAtTime(normalized, this.ctx!.currentTime);
+    this.balance = Math.max(-50, Math.min(50, pan));
+    this.applySettings();
   }
 
-  public loadTrack(src: string | File) {
-    this.initContext();
-    if (this.audioElement) {
-      if (typeof src === 'string') {
-        this.audioElement.src = src;
-      } else {
-        this.audioElement.src = URL.createObjectURL(src);
-      }
-      this.audioElement.load();
+  public getPreamp() {
+    return this.preamp;
+  }
+
+  public getEQBand(index: number) {
+    return this.bands[index] ?? 0;
+  }
+
+  public getBands() {
+    return [...this.bands];
+  }
+
+  public getEqEnabled() {
+    return this.eqEnabled;
+  }
+
+  private releaseObjectUrl() {
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl);
+      this.objectUrl = null;
     }
+  }
+
+  /**
+   * Loads a real track. Passing `null` clears the media element and switches
+   * the engine to the built-in demo synth (used by the bundled playlist).
+   */
+  public loadTrack(src: string | File | null) {
+    this.initContext();
+    const el = this.audioElement;
+    if (!el) return;
+
+    this.stopDemoSynthBeat();
+    el.pause();
+    this.sourceLoaded = false;
+    this.releaseObjectUrl();
+    el.removeAttribute('src');
+    try {
+      el.load();
+    } catch {
+      // Ignore: some platforms throw while resetting an unloaded element.
+    }
+
+    if (!src) return;
+
+    if (typeof src === 'string') {
+      el.src = src;
+    } else {
+      this.objectUrl = URL.createObjectURL(src);
+      el.src = this.objectUrl;
+    }
+    this.sourceLoaded = true;
+    el.load();
+  }
+
+  public hasSource() {
+    return this.sourceLoaded && !!this.audioElement?.src;
   }
 
   public async play() {
     await this.resumeContext();
-    if (this.audioElement && this.audioElement.src && !this.audioElement.src.endsWith('/')) {
-      return this.audioElement.play();
+    if (!this.audioElement) return;
+
+    if (this.hasSource()) {
+      try {
+        await this.audioElement.play();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.emitError(`Oynatma başlatılamadı: ${message}`);
+      }
     } else {
-      // Start built-in retro synth beat generator for instant sound & visualizer response!
+      // Built-in retro synth beat for the demo playlist tracks.
       this.startDemoSynthBeat();
     }
   }
 
   public pause() {
-    if (this.audioElement) {
-      this.audioElement.pause();
-    }
+    this.audioElement?.pause();
     this.stopDemoSynthBeat();
   }
 
   public stop() {
-    if (this.audioElement) {
+    if (this.hasSource() && this.audioElement) {
       this.audioElement.pause();
       this.audioElement.currentTime = 0;
     }
@@ -140,18 +285,20 @@ export class AudioEngine {
   }
 
   public seek(seconds: number) {
-    if (this.audioElement && isFinite(seconds)) {
-      this.audioElement.currentTime = seconds;
-    }
+    if (!this.hasSource() || !this.audioElement) return;
+    if (!Number.isFinite(seconds)) return;
+    const duration = this.audioElement.duration;
+    const max = Number.isFinite(duration) && duration > 0 ? duration : seconds;
+    this.audioElement.currentTime = Math.max(0, Math.min(max, seconds));
   }
 
-  public getFrequencyData(array: Uint8Array) {
+  public getFrequencyData(array: Uint8Array<ArrayBuffer>) {
     if (this.analyserNode) {
       this.analyserNode.getByteFrequencyData(array);
     }
   }
 
-  public getTimeDomainData(array: Uint8Array) {
+  public getTimeDomainData(array: Uint8Array<ArrayBuffer>) {
     if (this.analyserNode) {
       this.analyserNode.getByteTimeDomainData(array);
     }
@@ -163,10 +310,10 @@ export class AudioEngine {
     this.isDemoRunning = true;
 
     const chords = [
-      [130.81, 164.81, 196.00], // C
-      [110.00, 130.81, 164.81], // A
-      [146.83, 174.61, 220.00], // D
-      [98.00, 123.47, 146.83],  // G
+      [130.81, 164.81, 196.0], // C
+      [110.0, 130.81, 164.81], // A
+      [146.83, 174.61, 220.0], // D
+      [98.0, 123.47, 146.83], // G
     ];
 
     let step = 0;
@@ -179,8 +326,8 @@ export class AudioEngine {
       // Bass drum / retro bass pulse
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = (step % 4 === 0) ? 'sine' : 'sawtooth';
-      osc.frequency.setValueAtTime((step % 4 === 0) ? 65 : freq * 1.5, t);
+      osc.type = step % 4 === 0 ? 'sine' : 'sawtooth';
+      osc.frequency.setValueAtTime(step % 4 === 0 ? 65 : freq * 1.5, t);
       if (step % 4 === 0) {
         osc.frequency.exponentialRampToValueAtTime(30, t + 0.15);
       }

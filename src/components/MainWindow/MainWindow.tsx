@@ -49,7 +49,7 @@ export const MainWindow: React.FC<MainWindowProps> = ({
 
   // 60 FPS Visualizer Animation Loop
   useEffect(() => {
-    let animId: number;
+    let animId = 0;
     const canvas = visCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -58,13 +58,13 @@ export const MainWindow: React.FC<MainWindowProps> = ({
     const numBars = 18;
     const barHeights = new Array(numBars).fill(2);
     const peakHeights = new Array(numBars).fill(2);
-    const freqData = new Uint8Array(256);
+    const freqData = new Uint8Array(new ArrayBuffer(256));
 
-    const render = () => {
+    const drawFrame = (active: boolean) => {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      if (playback.isPlaying) {
+      if (active) {
         audio.getFrequencyData(freqData);
       }
 
@@ -73,7 +73,7 @@ export const MainWindow: React.FC<MainWindowProps> = ({
 
       for (let i = 0; i < numBars; i++) {
         let target = 2;
-        if (playback.isPlaying) {
+        if (active) {
           const sampleIndex = Math.floor((i / numBars) * 64);
           const raw = freqData[sampleIndex] || 0;
           target = Math.max(1, (raw / 255) * (canvas.height - 2));
@@ -107,7 +107,18 @@ export const MainWindow: React.FC<MainWindowProps> = ({
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(x, Math.max(0, peakY), barWidth, 1);
       }
+    };
 
+    // Idle: draw one flat frame and stop the animation loop entirely.
+    if (!playback.isPlaying) {
+      barHeights.fill(2);
+      peakHeights.fill(2);
+      drawFrame(false);
+      return;
+    }
+
+    const render = () => {
+      drawFrame(true);
       animId = requestAnimationFrame(render);
     };
 
@@ -131,10 +142,11 @@ export const MainWindow: React.FC<MainWindowProps> = ({
     : 0;
 
   const handlePosbarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (playback.duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-    onSeek(ratio * (playback.duration || 100));
+    onSeek(ratio * playback.duration);
   };
 
   return (
@@ -161,9 +173,29 @@ export const MainWindow: React.FC<MainWindowProps> = ({
           <span className="text-[9px] font-bold text-white tracking-widest font-mono">WINAMP</span>
         </div>
         <div className="flex items-center gap-0.5 z-10">
-          <div className="wa-tbtn" title="Minimize">_</div>
-          <div className="wa-tbtn" title="Windowshade" onClick={() => setIsShaded(!isShaded)}>▢</div>
-          <div className="wa-tbtn text-red-300" title="Close" onClick={onStop}>×</div>
+          <div
+            className="wa-tbtn"
+            title="Simge durumuna küçült"
+            onClick={() => window.electronAPI?.minimizeWindow()}
+          >
+            _
+          </div>
+          <div className="wa-tbtn" title="Windowshade" onClick={() => setIsShaded(!isShaded)}>
+            ▢
+          </div>
+          <div
+            className="wa-tbtn text-red-300"
+            title={window.electronAPI ? 'Tepsiye gizle' : 'Durdur ve kapat'}
+            onClick={() => {
+              if (window.electronAPI) {
+                window.electronAPI.closeWindow();
+              } else {
+                onStop();
+              }
+            }}
+          >
+            ×
+          </div>
         </div>
       </div>
 

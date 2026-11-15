@@ -1,55 +1,62 @@
-# 🚀 WinAMP Retro Player - Gelecek Özellikler ve Yol Haritası (Roadmap)
+# 🗺️ WinAMP Retro Player — Yol Haritası
 
-Bu belge, retro Winamp deneyimini hem orijinal nostaljisiyle korumak hem de modern yeteneklerle zenginleştirmek için üzerine düşündüğümüz yaratıcı fikirleri ve gelecek özellikleri listeler.
-
----
-
-## 🎯 1. Nostalji ve Çekirdek Kullanıcı Deneyimi Özellikleri
-
-### 1.1. Windowshade Modu (İnce Çubuk / Mini Bar Modu)
-- Pencerelerin başlık çubuğuna çift tıklandığında (veya sağ üstteki `▢` butonuna basıldığında), pencere yalnızca 14 piksel yüksekliğinde yatay bir mini kontrol çubuğuna daralır (`Winamp Windowshade Mode`).
-- Tekrar tıklandığında eski boyutuna döner.
-
-### 1.2. Double-Size Modu (2x Ölçekleme - `Ctrl+D`)
-- Günümüzün 4K ve yüksek DPI monitörlerinde 275x116 pikselin çok küçük kalmaması için piksel doğruluğunu (pixelated nearest-neighbor) bozmadan pencereleri 2 katına (550x232px) ölçekleyebilme seçeneği.
-
-### 1.3. Efsanevi "It really whips the llama's ass!" Açılış Sesi
-- Uygulama ilk kez açıldığında veya Menüden "Hakkında (About)" tıklandığında nostaljik Winamp açılış sesini (`demo.mp3`) opsiyonel olarak çalma.
+Bu belge, mevcut sürümde **gerçekten çalışan** özellikler ile planlanan işleri ayırır.
 
 ---
 
-## 🎵 2. Müzik, Radyo & Medya Entegrasyonları
+## ✅ Tamamlananlar (v1.0.0)
 
-### 2.1. Shoutcast & İnternet Radyosu Desteği
-- Canlı online radyo istasyonları rehberi (Synthwave, Lofi, 90s Eurodance, Rock vb.) ve kullanıcının özel akış URL'si (`.pls`, `.m3u`, `http://...`) girerek internet radyosu dinleyebilmesi.
-
-### 2.2. ID3 Metadata Görüntüleyici ve Düzenleyici (`Alt+3`)
-- Şarkı etiketlerini (Sanatçı, Parça Adı, Albüm, Yıl, Tür) klasik Winamp diyalog penceresinde görüntüleme ve düzenleyebilme.
-
----
-
-## 🖥️ 3. Masaüstü & İşletim Sistemi Entegrasyonu
-
-### 3.1. Sistem Tepsisi (System Tray) & Mini Kontroller
-- Pencere kapatıldığında veya simge durumuna küçültüldüğünde görev çubuğu bildirim alanına (Tray) retro sarı şimşek simgesi olarak yerleşme.
-- Tepsi simgesine sağ tıklandığında Winamp retro menüsü (Oynat, Durdur, Sonraki, Çıkış).
-
-### 3.2. Global Medya Kısayolları (Global Hotkeys)
-- Uygulama arka plandayken veya bir tam ekran oyundayken klavyedeki multimedya tuşları (Play/Pause, Next, Previous, Volume) ile müziği kontrol edebilme.
-
-### 3.3. Discord Rich Presence
-- Discord durumunuzda *"Listening to [Şarkı Adı] on Winamp 2.9"* olarak retro şimşek simgesiyle görünmesi.
+| Özellik | Durum |
+| --- | --- |
+| Winamp 2.9x görsel dili (275×116 Main/EQ, resize Playlist) | Tamamlandı |
+| Windowshade (başlığa çift tık / ▢) | Tamamlandı |
+| 1.5x görsel büyütme (`Ctrl+D`) | Tamamlandı |
+| "It really whips the llama's ass!" hakkında penceresi ve synth sesi | Tamamlandı |
+| Gerçek yerel dosya oynatma + sürükle-bırak | Tamamlandı |
+| Gerçek süre, seek, otomatik sıradaki parça, repeat, shuffle | Tamamlandı |
+| 10 bant EQ + preamp + presetler + canlı grafik | Tamamlandı |
+| 18 çubuk spectrum analizörü | Tamamlandı |
+| Sistem tepsisi (göster/gizle, oynat, sonraki/önceki, çıkış) | Tamamlandı |
+| Global medya tuşları | Tamamlandı |
+| Tek örnek kilidi, tepsiye gizlenme | Tamamlandı |
+| Uygulama içi URL / internet radyosu ekleme | Tamamlandı |
+| Tip kontrolü + GitHub Actions cross-platform build/release | Tamamlandı |
 
 ---
 
-## 📊 Sürüm Planı
+## 🎯 v1.1.0 — Masaüstü deneyimini derinleştirme
 
-| Özellik | Hedef Sürüm | Durum |
-| :--- | :--- | :--- |
-| **0px Manyetik Kenetlenme & Çekirdek Çalar** | `v1.0.0` | Planlandı / Hazır |
-| **Windowshade (Mini Bar) & Double-Size (2x)** | `v1.0.0` | Planlandı / Dahil Edildi |
-| **Llama Açılış Sesi & Retro Hakkında Penceresi** | `v1.0.0` | Planlandı / Dahil Edildi |
-| **Sistem Tepsisi (Tray) & Global Hotkeys** | `v1.1.0` | Planlandı |
-| **Shoutcast İnternet Radyosu & ID3 Tag Editör** | `v1.1.0` | Planlandı |
-| **Discord Rich Presence** | `v1.2.0` | Planlandı |
-| **Harici .wsz Tema Yükleyici** | İncelemede | Askıya Alındı (Opsiyonel) |
+- **Gerçek çoklu pencere ve manyetik kenetlenme**: Main, EQ ve Playlist'in ayrı `BrowserWindow`'ları olması; 12 px yaklaşınca kenetlenme, ana pencereyle grup sürükleme.
+- **ID3 / Vorbis metadata**: sanatçı, albüm, yıl, tür ve kapak görseli; `Alt+3` bilgi penceresi.
+- **Çalma listesi kalıcılığı**: uygulama kapanıp açıldığında playlist ve son konumun korunması; `.m3u` içe/dışa aktarma.
+- **Shoutcast / radio directory**: hazır istasyon listesi ve `.pls` / `.m3u` akış desteği.
+- **Gerçek bitrate / sample rate göstergesi**: `AudioContext` ve dosya metadatasından okuma.
+
+## 🎯 v1.2.0 — Entegrasyonlar ve kişiselleştirme
+
+- **Discord Rich Presence**: "Listening to … on Winamp 2.9" durumu.
+- **`.wsz` tema yükleyici**: klasik Winamp skinlerini içe aktarma.
+- **Ses seviyesi medya tuşları** ve isteğe bağlı özel global kısayollar.
+- **Mini player / masaüstü widget** modu.
+
+---
+
+## 🔧 Teknik borç ve altyapı
+
+| İş | Öncelik | Not |
+| --- | --- | --- |
+| Electron 33 → güncel major sürüm | Yüksek | 33 desteği sona erdi; güvenlik güncellemesi gerekli |
+| macOS imzalama + notarization | Yüksek | Şu an imzasız; Gatekeeper uyarısı verir |
+| Otomatik testler (Vitest + Playwright) | Orta | Oynatma durumu ve playlist mantığı için birim testleri |
+| ESLint + Prettier | Orta | Kod stili ve erken hata yakalama |
+| CSP ve güvenlik sertleştirmesi | Orta | `file://` yerine özel protokol, mümkünse `sandbox: true` |
+| Universal macOS paketi (x64 + arm64) | Düşük | CI runner arm64 üretiyor |
+| Vite 5 → güncel sürüm | Düşük | Breaking change riski düşük |
+| Çoklu dil (TR/EN) | Düşük | Arayüz şu an Türkçe/İngilizce karışık |
+
+---
+
+## ❌ Kapsam dışı
+
+- Winamp Pro / Nullsoft ticari özellikleri ve orijinal binary'lerin yeniden dağıtımı.
+- Şu an için video oynatma veya kütüphane tarama (library) özellikleri.
