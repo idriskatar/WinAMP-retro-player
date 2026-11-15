@@ -2,9 +2,9 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.idriskatar.winamp-retro-player",
   "productName": "WinAMP Retro Player",
-  "copyright": "Copyright © 2026 Idris Katar",
   "directories": {
-    "output": "release"
+    "output": "release",
+    "buildResources": "build"
   },
   "files": [
     "dist",
@@ -12,17 +12,8 @@
     "package.json"
   ],
   "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64"]
-      },
-      {
-        "target": "portable",
-        "arch": ["x64"]
-      }
-    ],
-    "icon": "public/icon.ico"
+    "target": ["nsis", "portable"],
+    "icon": "build/icon.ico"
   },
   "nsis": {
     "oneClick": false,
@@ -32,32 +23,16 @@
     "shortcutName": "WinAMP Retro Player"
   },
   "mac": {
-    "target": [
-      {
-        "target": "dmg"
-      },
-      {
-        "target": "zip"
-      }
-    ],
+    "target": ["dmg", "zip"],
     "identity": null,
     "hardenedRuntime": false,
     "gatekeeperAssess": false,
     "category": "public.app-category.music",
-    "icon": "public/icon.icns"
+    "icon": "build/icon.icns"
   },
   "linux": {
-    "target": [
-      {
-        "target": "AppImage",
-        "arch": ["x64"]
-      },
-      {
-        "target": "deb",
-        "arch": ["x64"]
-      }
-    ],
+    "target": ["AppImage", "deb"],
     "category": "AudioVideo",
-    "icon": "public/icon.png"
+    "icon": "build/icon.png"
   }
 }
