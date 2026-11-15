@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinAMP 2.9x Classic Player</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* Winamp Klasik 3D Kabartmalı Çerçeve (0 Boşluklu Kenetlenme için Kesin Boyutlar) */
+    .wa-window {
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+      background-color: #27272b;
+      border-top: 1px solid #6b6d75;
+      border-left: 1px solid #6b6d75;
+      border-right: 1px solid #0d0e10;
+      border-bottom: 1px solid #0d0e10;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+
+    /* Orijinal Klasik 2.9 Base Skin Modu */
+    .theme-classic .wa-window {
+      background: #242528;
+      border-top: 1px solid #75777f;
+      border-left: 1px solid #75777f;
+      border-right: 1px solid #000000;
+      border-bottom: 1px solid #000000;
+    }
+
+    /* Orijinal Başlık Çubuğu */
+    .wa-titlebar {
+      height: 14px;
+      background: linear-gradient(90deg, #050b24 0%, #172d73 30%, #2847a6 65%, #172d73 90%, #050b24 100%);
+      border-bottom: 1px solid #0d0e10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 3px;
+      cursor: grab;
+      position: relative;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+    .wa-titlebar::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.35) 2px, rgba(0,0,0,0.35) 3px);
+      pointer-events: none;
+    }
+
+    .wa-tbtn {
+      width: 9px;
+      height: 9px;
+      background: #393a40;
+      border-top: 1px solid #7c7e86;
+      border-left: 1px solid #7c7e86;
+      border-right: 1px solid #101114;
+      border-bottom: 1px solid #101114;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 7px;
+      line-height: 1;
+      color: #ccc;
+      cursor: pointer;
+      z-index: 12;
+    }
+    .wa-tbtn:active {
+      background: #1e1f23;
+      border-top: 1px solid #101114;
+      border-left: 1px solid #101114;
+      border-right: 1px solid #7c7e86;
+      border-bottom: 1px solid #7c7e86;
+    }
+
+    /* Klasik Çökük Siyah LCD Zemin */
+    .wa-lcd-box {
+      background-color: #000000;
+      border-top: 1px solid #0c0d0f;
+      border-left: 1px solid #0c0d0f;
+      border-right: 1px solid #4a4c54;
+      border-bottom: 1px solid #4a4c54;
+    }
+
+    /* Metal Butonlar */
+    .wa-btn {
+      background: linear-gradient(180deg, #53555c 0%, #383a3f 50%, #27282c 100%);
+      border-top: 1px solid #82848e;
+      border-left: 1px solid #82848e;
+      border-right: 1px solid #101113;
+      border-bottom: 1px solid #101113;
+      color: #c8cad2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      font-size: 8px;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .wa-btn:active {
+      background: linear-gradient(180deg, #18191c 0%, #2b2c30 100%);
+      border-top: 1px solid #101113;
+      border-left: 1px solid #101113;
+      border-right: 1px solid #82848e;
+      border-bottom: 1px solid #82848e;
+      transform: translateY(0.5px);
+    }
+
+    /* Seekbar (Posbar) */
+    .wa-posbar-track {
+      background-color: #000000;
+      border-top: 1px solid #08090a;
+      border-left: 1px solid #08090a;
+      border-right: 1px solid #43454c;
+      border-bottom: 1px solid #43454c;
+      position: relative;
+      cursor: pointer;
+    }
+    .wa-posbar-thumb {
+      position: absolute;
+      top: -1px;
+      width: 28px;
+      height: 10px;
+      background: linear-gradient(180deg, #696b73 0%, #3d3f45 100%);
+      border-top: 1px solid #9597a1;
+      border-left: 1px solid #9597a1;
+      border-right: 1px solid #121316;
+      border-bottom: 1px solid #121316;
+      cursor: pointer;
+    }
+
+    /* Dikey EQ Slider (Tam 116px içine sığacak boyutta kalibre edildi) */
+    input[type=range].wa-eq-v {
+      -webkit-appearance: none;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 13px;
+      height: 46px;
+      background: transparent;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    input[type=range].wa-eq-v::-webkit-slider-runnable-track {
+      width: 3px;
+      background: #000;
+      border-left: 1px solid #000;
+      border-right: 1px solid #404249;
+    }
+    input[type=range].wa-eq-v::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px;
+      height: 8px;
+      margin-left: -4px;
+      background: linear-gradient(180deg, #6b6d76 0%, #3a3b41 100%);
+      border-top: 1px solid #9da0ab;
+      border-left: 1px solid #9da0ab;
+      border-right: 1px solid #111215;
+      border-bottom: 1px solid #111215;
+    }
+
+    /* Marquee Animasyonu (Kesinti olmadan net yazı) */
+    @keyframes marqueeScroll {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .animate-marquee {
+      display: inline-block;
+      white-space: nowrap;
+      line-height: 12px;
+      animation: marqueeScroll 14s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-[#121316] text-[#c2c4cb] antialiased p-3 m-0 font-sans text-xs select-none">
+
+  <!-- Header & Toolbar -->
+  <div class="flex items-center justify-between pb-2 mb-3 border-b border-[#25272e]">
+    <div class="flex items-center gap-2">
+      <!-- Classic Yellow Lightning Bolt Badge -->
+      <div class="w-6 h-6 bg-[#081233] rounded border border-yellow-500/60 flex items-center justify-center shadow-[0_0_8px_rgba(234,179,8,0.4)]">
+        <svg class="w-4 h-4 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+          WinAMP 2.9x Klasik Arayüz Doğrulaması
+          <span class="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-700/80 px-1.5 py-0.5 rounded font-mono">0px Boşluk (Tam Kenetli)</span>
+        </h1>
+        <p class="text-[11px] text-zinc-400">Pencereler arası boşluk sıfırlandı; dikey ve yatay tam yapışık hizalandı.</p>
+      </div>
+    </div>
+    
+    <!-- Controls: Layout Switcher, Skin Theme & Play Toggle -->
+    <div class="flex items-center gap-2">
+      <!-- Layout Switcher -->
+      <div class="flex items-center bg-[#1a1b20] p-0.5 rounded border border-zinc-700 text-xs">
+        <button id="btnSideLayout" class="px-2.5 py-1 rounded bg-zinc-700 text-white font-medium">Yan Yana (Main+EQ \| Playlist)</button>
+        <button id="btnStackLayout" class="px-2.5 py-1 rounded text-zinc-400 hover:text-white">Klasik Dikey (Main ↓ EQ ↓ Playlist)</button>
+      </div>
+
+      <!-- Play Toggle -->
+      <button id="playBtnToggle" class="px-2.5 py-1 rounded bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-xs flex items-center gap-1 shadow">
+        <span id="playIcon">▶</span> <span id="playText">Oynat</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Workspace Container: Pure Left-Aligned, Seamless 0px Snap -->
+  <div id="workspace" class="p-4 bg-[#141518] rounded-lg border border-[#26282f] overflow-x-auto overflow-y-hidden" style="min-height: 310px;">
+    
+    <!-- Winamp Layout Shell: In side-by-side mode, gap is strictly 0px! -->
+    <div id="layoutShell" class="flex flex-row items-start" style="gap: 0px;">
+      
+      <!-- LEFT COLUMN: Main Window + Equalizer Window (Fixed 275px wide, gap: 0px) -->
+      <div id="leftColumn" class="flex flex-col items-start shrink-0 w-[275px]" style="gap: 0px;">
+        
+        <!-- ======================================================== -->
+        <!-- 1. MAIN PLAYER (EXACT 275 x 116 px)                     -->
+        <!-- ======================================================== -->
+        <div id="mainWindow" class="wa-window" style="width: 275px; height: 116px; min-width: 275px; max-width: 275px; min-height: 116px; max-height: 116px; margin: 0; padding: 0;">
+          
+          <!-- Titlebar (y: 0, h: 14) -->
+          <div class="wa-titlebar">
+            <div class="flex items-center gap-1 z-10">
+              <svg class="w-2.5 h-2.5 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z"/>
+              </svg>
+              <span class="text-[9px] font-bold text-white tracking-widest font-mono">WINAMP</span>
+            </div>
+            <div class="flex items-center gap-0.5 z-10">
+              <div class="wa-tbtn" title="Minimize">_</div>
+              <div class="wa-tbtn" title="Windowshade">▢</div>
+              <div id="mainCloseBtn" class="wa-tbtn text-red-300" title="Close">×</div>
+            </div>
+          </div>
+
+          <!-- Clutterbar (O, A, I, D, V) - x: 8, y: 18 -->
+          <div class="absolute" style="left: 8px; top: 18px; width: 10px; display: flex; flex-direction: column; gap: 1px;">
+            <button class="wa-btn" style="width: 10px; height: 7px; font-size: 6px;">O</button>
+            <button class="wa-btn" style="width: 10px; height: 7px; font-size: 6px;">A</button>
+            <button class="wa-btn" style="width: 10px; height: 7px; font-size: 6px;">I</button>
+            <button class="wa-btn" style="width: 10px; height: 7px; font-size: 6px;">D</button>
+            <button class="wa-btn" style="width: 10px; height: 7px; font-size: 6px;">V</button>
+          </div>
+
+          <!-- LCD Display Box - x: 22, y: 18, w: 245, h: 42 (Marquee asla kesilmez) -->
+          <div class="absolute wa-lcd-box overflow-hidden flex flex-col justify-between" style="left: 22px; top: 18px; width: 245px; height: 42px; padding: 2px 4px;">
+            <!-- Row 1: Spectrum Vis + Green Timer + Badges (h: 18px) -->
+            <div class="flex items-center justify-between" style="height: 18px;">
+              <!-- 60 FPS Visualizer Canvas (w: 70, h: 16) -->
+              <div class="bg-black border border-[#112211]" style="width: 70px; height: 16px;">
+                <canvas id="visCanvas" width="70" height="16" class="block"></canvas>
+              </div>
+
+              <!-- Digital LED Time (01:42) -->
+              <div class="font-mono font-bold text-[#00FF00] text-sm tracking-wider flex items-center leading-none" style="text-shadow: 0 0 4px #00FF00;">
+                <span>01:42</span>
+              </div>
+
+              <!-- Bitrate / kHz / Stereo -->
+              <div class="flex flex-col items-end text-[7px] font-mono leading-none text-emerald-400">
+                <div><span class="text-emerald-300 font-bold">192</span> KBPS <span class="text-emerald-300 font-bold">44</span> KHZ</div>
+                <div class="flex gap-1 mt-0.5 text-[6px]">
+                  <span class="bg-[#002800] text-[#00FF55] px-0.5 border border-[#005500]">STEREO</span>
+                  <span class="text-zinc-600">MONO</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Marquee Song Title (Net, tam yükseklik, sıfır dikey kesilme) -->
+            <div class="w-full overflow-hidden whitespace-nowrap text-[9px] font-mono text-[#00FF44] border-t border-[#0b160b] flex items-center" style="height: 16px;">
+              <span class="animate-marquee">1. DJ Mike Llama - Whippin The Badass Retro Beat (Winamp 2.9x Classic) ***</span>
+            </div>
+          </div>
+
+          <!-- Seekbar (Posbar) - x: 15, y: 64, w: 245, h: 10 -->
+          <div class="absolute wa-posbar-track" style="left: 15px; top: 64px; width: 245px; height: 10px;">
+            <div id="posbarThumb" class="wa-posbar-thumb" style="left: 60px;"></div>
+          </div>
+
+          <!-- Volume & Balance Sliders - y: 78 -->
+          <div class="absolute flex items-center gap-1" style="left: 15px; top: 78px;">
+            <span class="text-[7px] font-mono text-zinc-400">VOL</span>
+            <div class="wa-lcd-box relative overflow-hidden flex items-center" style="width: 70px; height: 10px; padding: 1px;">
+              <div class="h-1 bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 rounded-sm" style="width: 75%;"></div>
+              <input type="range" min="0" max="100" value="75" class="absolute inset-0 opacity-0 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- Balance Slider -->
+          <div class="absolute flex items-center gap-1" style="left: 115px; top: 78px;">
+            <span class="text-[7px] font-mono text-zinc-400">BAL</span>
+            <div class="wa-lcd-box relative overflow-hidden flex items-center justify-center" style="width: 45px; height: 10px;">
+              <div class="w-1 h-1.5 bg-emerald-400"></div>
+              <input type="range" min="-50" max="50" value="0" class="absolute inset-0 opacity-0 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- EQ & PL Window Buttons -->
+          <div class="absolute flex items-center gap-1" style="right: 15px; top: 78px;">
+            <button id="toggleEQBtn" class="wa-btn text-emerald-400 bg-[#162916] border-emerald-600" style="width: 18px; height: 12px; font-size: 7px;">EQ</button>
+            <button id="togglePLBtn" class="wa-btn text-yellow-400 bg-[#292416] border-yellow-600" style="width: 18px; height: 12px; font-size: 7px;">PL</button>
+          </div>
+
+          <!-- Bottom Transport Buttons - y: 93 (h: 16) -->
+          <div class="absolute flex items-center gap-0.5" style="left: 15px; top: 93px;">
+            <button class="wa-btn" style="width: 23px; height: 16px;">|&lt;&lt;</button>
+            <button id="mainPlayBtn" class="wa-btn text-emerald-300 font-bold" style="width: 23px; height: 16px;">▶</button>
+            <button class="wa-btn" style="width: 23px; height: 16px;">❚❚</button>
+            <button class="wa-btn text-red-400" style="width: 23px; height: 16px;">■</button>
+            <button class="wa-btn" style="width: 22px; height: 16px;">&gt;&gt;|</button>
+            <button class="wa-btn" style="width: 22px; height: 16px;">⏏</button>
+          </div>
+
+          <!-- Shuffle & Repeat -->
+          <div class="absolute flex items-center gap-1" style="right: 15px; top: 94px;">
+            <button class="wa-btn text-zinc-400" style="padding: 1px 4px; height: 14px; font-size: 7px;">SHUF</button>
+            <button class="wa-btn text-emerald-300 font-bold" style="padding: 1px 4px; height: 14px; font-size: 7px;">REP</button>
+          </div>
+
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- 2. EQUALIZER (EXACT 275 x 116 px)                       -->
+        <!-- ======================================================== -->
+        <!-- Main Window'un hemen altına 0px aralıkla yapışır -->
+        <div id="eqWindow" class="wa-window" style="width: 275px; height: 116px; min-width: 275px; max-width: 275px; min-height: 116px; max-height: 116px; margin: 0; padding: 0;">
+          
+          <!-- EQ Titlebar (y: 0, h: 14) -->
+          <div class="wa-titlebar">
+            <div class="flex items-center gap-1 z-10">
+              <svg class="w-2.5 h-2.5 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z"/>
+              </svg>
+              <span class="text-[9px] font-bold text-white tracking-widest font-mono">WINAMP EQUALIZER</span>
+            </div>
+            <div class="flex items-center gap-0.5 z-10">
+              <div class="wa-tbtn" title="Windowshade">▢</div>
+              <div id="eqCloseBtn" class="wa-tbtn text-red-300" title="Close">×</div>
+            </div>
+          </div>
+
+          <!-- Upper Row: ON/AUTO Buttons + Spline Graph + Presets - y: 17 -->
+          <div class="absolute flex items-center justify-between" style="left: 12px; top: 17px; width: 251px; height: 18px;">
+            <div class="flex items-center gap-1">
+              <button class="wa-btn text-emerald-400 bg-emerald-950 border-emerald-600" style="padding: 1px 4px; height: 14px; font-size: 7px;">ON</button>
+              <button class="wa-btn text-zinc-400" style="padding: 1px 4px; height: 14px; font-size: 7px;">AUTO</button>
+            </div>
+            <!-- Real-time Spline Graph -->
+            <div class="wa-lcd-box overflow-hidden" style="width: 110px; height: 16px;">
+              <canvas id="eqGraph" width="110" height="16" class="block"></canvas>
+            </div>
+            <button class="wa-btn text-amber-300 font-mono" style="padding: 1px 5px; height: 14px; font-size: 7px;">PRESETS</button>
+          </div>
+
+          <!-- EQ Sliders Container - y: 38 (Tam 116px sınırına kadar, alt etiketler asla kesilmez) -->
+          <div class="absolute flex items-center justify-between" style="left: 10px; top: 38px; width: 255px; height: 68px;">
+            <!-- Preamp Slider -->
+            <div class="flex flex-col items-center justify-between" style="width: 22px; height: 66px;">
+              <span class="text-[6px] font-mono text-zinc-400">PRE</span>
+              <input type="range" min="-12" max="12" value="2" class="wa-eq-v eq-slider-item" data-idx="pre">
+              <span class="text-[6px] font-mono text-emerald-400">+2dB</span>
+            </div>
+
+            <!-- Vertical Divider -->
+            <div class="w-px bg-zinc-700" style="height: 52px;"></div>
+
+            <!-- 10 Bands -->
+            <div class="flex items-center justify-between flex-1 px-1" style="height: 66px;">
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">60</span><input type="range" min="-12" max="12" value="4" class="wa-eq-v eq-slider-item" data-idx="0"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">170</span><input type="range" min="-12" max="12" value="2" class="wa-eq-v eq-slider-item" data-idx="1"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">310</span><input type="range" min="-12" max="12" value="-1" class="wa-eq-v eq-slider-item" data-idx="2"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">600</span><input type="range" min="-12" max="12" value="-3" class="wa-eq-v eq-slider-item" data-idx="3"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">1K</span><input type="range" min="-12" max="12" value="0" class="wa-eq-v eq-slider-item" data-idx="4"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">3K</span><input type="range" min="-12" max="12" value="3" class="wa-eq-v eq-slider-item" data-idx="5"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">6K</span><input type="range" min="-12" max="12" value="5" class="wa-eq-v eq-slider-item" data-idx="6"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">12K</span><input type="range" min="-12" max="12" value="4" class="wa-eq-v eq-slider-item" data-idx="7"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">14K</span><input type="range" min="-12" max="12" value="2" class="wa-eq-v eq-slider-item" data-idx="8"><span class="text-[5px] text-zinc-500">-</span></div>
+              <div class="flex flex-col items-center justify-between h-full"><span class="text-[6px] text-zinc-400">16K</span><input type="range" min="-12" max="12" value="1" class="wa-eq-v eq-slider-item" data-idx="9"><span class="text-[5px] text-zinc-500">-</span></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: PLAYLIST WINDOW (RESIZABLE - MIN 275 x 116 px) -->
+      <!-- Yan yana düzende: 0px boşlukla tam sağ kenara yapışık, yükseklik Main+EQ'ya (116+116 = 232px) tam eşit! -->
+      <div id="playlistWindow" class="wa-window flex flex-col justify-between shrink-0" style="width: 275px; height: 232px; min-width: 275px; min-height: 116px; margin: 0; padding: 0;">
+        
+        <!-- Playlist Titlebar (h: 14) -->
+        <div class="wa-titlebar">
+          <div class="flex items-center gap-1 z-10">
+            <svg class="w-2.5 h-2.5 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z"/>
+            </svg>
+            <span class="text-[9px] font-bold text-white tracking-widest font-mono">WINAMP PLAYLIST</span>
+          </div>
+          <div class="flex items-center gap-0.5 z-10">
+            <div class="wa-tbtn" title="Windowshade">▢</div>
+            <div id="plCloseBtn" class="wa-tbtn text-red-300" title="Close">×</div>
+          </div>
+        </div>
+
+        <!-- Playlist List Box -->
+        <div class="wa-lcd-box m-1 p-1 flex-1 overflow-y-auto font-mono text-[9px] leading-tight select-none">
+          <div class="flex justify-between items-center px-1 text-[#00FF44] bg-[#002806] border-l-2 border-[#00FF44] cursor-pointer">
+            <span class="truncate">1. DJ Mike Llama - Whippin The Badass Retro Beat</span>
+            <span class="ml-2 font-bold">04:12</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-amber-300 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">2. Daft Punk - Harder Better Faster Stronger</span>
+            <span class="ml-2">03:45</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-amber-300 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">3. Prodigy - Breathe (Original 2.9 Mix)</span>
+            <span class="ml-2">05:35</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-zinc-400 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">4. Darude - Sandstorm (Classic 128kbps)</span>
+            <span class="ml-2">03:44</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-zinc-400 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">5. ATB - 9 PM (Till I Come) Club Mix</span>
+            <span class="ml-2">03:18</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-zinc-400 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">6. Faithless - Insomnia (Radio Edit)</span>
+            <span class="ml-2">03:36</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-zinc-500 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">7. Chemical Brothers - Block Rockin' Beats</span>
+            <span class="ml-2">05:14</span>
+          </div>
+          <div class="flex justify-between items-center px-1 text-zinc-500 hover:bg-[#151622] cursor-pointer">
+            <span class="truncate">8. Fatboy Slim - Right Here, Right Now</span>
+            <span class="ml-2">06:27</span>
+          </div>
+        </div>
+
+        <!-- Playlist Bottom Bar: Action buttons & Counters -->
+        <div class="px-1 pb-1 flex items-center justify-between text-[8px] font-mono">
+          <div class="flex items-center gap-0.5">
+            <button class="wa-btn px-1.5 py-0.5">+ ADD</button>
+            <button class="wa-btn px-1.5 py-0.5">- REM</button>
+            <button class="wa-btn px-1 py-0.5">SEL</button>
+            <button class="wa-btn px-1 py-0.5">MISC</button>
+            <button class="wa-btn px-1 py-0.5">LIST</button>
+          </div>
+          <div class="flex items-center gap-1.5 bg-black px-1.5 py-0.5 wa-lcd-box text-emerald-400 text-[8px]">
+            <span>8 TRK</span>
+            <span>36:11</span>
+          </div>
+        </div>
+
+        <!-- Resizable Corner Handle (Classic Winamp 3-Stripes) -->
+        <div id="plResizeGrip" class="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-nwse-resize z-30 flex items-end justify-end p-0.5 group" title="Playlist'i Boyutlandırmak için Sürükleyin">
+          <div class="w-2.5 h-2.5 flex flex-col justify-between items-end">
+            <div class="w-1 h-0.5 bg-zinc-500"></div>
+            <div class="w-2 h-0.5 bg-zinc-400"></div>
+            <div class="w-2.5 h-0.5 bg-yellow-400"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="mt-2 text-[11px] text-zinc-400 flex items-center justify-between">
+    <span>💡 <b>Piksel Doğruluğu:</b> Main (275x116) + EQ (275x116) = Tam 232px yükseklik. Playlist yan yana modda tam 232px ile sıfır boşlukla hizalanır.</span>
+    <span class="font-mono text-zinc-500">Winamp 2.9x Classic Base Skin Replica</span>
+  </div>
+
+  <script>
+    // 1. Spektrum Analizör Motoru (60 FPS)
+    const visCanvas = document.getElementById('visCanvas');
+    const visCtx = visCanvas.getContext('2d');
+    const numBars = 18;
+    const barHeights = new Array(numBars).fill(2);
+    const peakHeights = new Array(numBars).fill(2);
+    let isPlaying = true;
+
+    function renderVis() {
+      visCtx.fillStyle = '#000000';
+      visCtx.fillRect(0, 0, visCanvas.width, visCanvas.height);
+
+      const barWidth = 3;
+      const gap = 1;
+
+      for (let i = 0; i < numBars; i++) {
+        if (isPlaying) {
+          const factor = 1 - (i / numBars) * 0.45;
+          const target = Math.random() * (visCanvas.height - 2) * factor;
+          barHeights[i] += (target - barHeights[i]) * 0.4;
+        } else {
+          barHeights[i] += (1 - barHeights[i]) * 0.2;
+        }
+
+        if (barHeights[i] > peakHeights[i]) {
+          peakHeights[i] = barHeights[i];
+        } else {
+          peakHeights[i] = Math.max(0, peakHeights[i] - 0.35);
+        }
+
+        const h = Math.max(1, Math.floor(barHeights[i]));
+        const x = i * (barWidth + gap);
+
+        // Winamp Klasik 3 Katmanlı Renk
+        for (let y = 0; y < h; y += 2) {
+          const actualY = visCanvas.height - y - 1;
+          if (y > visCanvas.height * 0.7) {
+            visCtx.fillStyle = '#FF2222';
+          } else if (y > visCanvas.height * 0.4) {
+            visCtx.fillStyle = '#FFFF00';
+          } else {
+            visCtx.fillStyle = '#00FF00';
+          }
+          visCtx.fillRect(x, actualY, barWidth, 1.5);
+        }
+
+        // Beyaz Tepe Noktası (Peak)
+        const peakY = visCanvas.height - Math.floor(peakHeights[i]) - 1;
+        visCtx.fillStyle = '#FFFFFF';
+        visCtx.fillRect(x, Math.max(0, peakY), barWidth, 1);
+      }
+
+      requestAnimationFrame(renderVis);
+    }
+    renderVis();
+
+    // 2. EQ Spline Eğrisi
+    const eqCanvas = document.getElementById('eqGraph');
+    const eqCtx = eqCanvas.getContext('2d');
+    const eqSliders = document.querySelectorAll('.eq-slider-item');
+
+    function updateEQGraph() {
+      eqCtx.fillStyle = '#000000';
+      eqCtx.fillRect(0, 0, eqCanvas.width, eqCanvas.height);
+
+      eqCtx.strokeStyle = '#00FF44';
+      eqCtx.lineWidth = 1.5;
+      eqCtx.beginPath();
+
+      const points = [];
+      const bands = Array.from(eqSliders).filter(s => s.dataset.idx !== 'pre');
+      const step = eqCanvas.width / (bands.length - 1);
+
+      bands.forEach((s, idx) => {
+        const val = parseFloat(s.value);
+        const normalizedY = eqCanvas.height / 2 - (val / 12) * (eqCanvas.height / 2 - 2);
+        points.push({ x: idx * step, y: normalizedY });
+      });
+
+      eqCtx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        const xc = (points[i].x + points[i - 1].x) / 2;
+        const yc = (points[i].y + points[i - 1].y) / 2;
+        eqCtx.quadraticCurveTo(points[i - 1].x, points[i - 1].y, xc, yc);
+      }
+      eqCtx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+      eqCtx.stroke();
+    }
+    updateEQGraph();
+
+    eqSliders.forEach(slider => {
+      slider.addEventListener('input', updateEQGraph);
+    });
+
+    // 3. Play/Pause
+    const playBtnToggle = document.getElementById('playBtnToggle');
+    const mainPlayBtn = document.getElementById('mainPlayBtn');
+    const playIcon = document.getElementById('playIcon');
+    const playText = document.getElementById('playText');
+
+    function togglePlayback() {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        playIcon.textContent = '■';
+        playText.textContent = 'Durdur';
+        mainPlayBtn.classList.add('text-emerald-300');
+      } else {
+        playIcon.textContent = '▶';
+        playText.textContent = 'Oynat';
+        mainPlayBtn.classList.remove('text-emerald-300');
+      }
+    }
+    playBtnToggle.addEventListener('click', togglePlayback);
+    mainPlayBtn.addEventListener('click', togglePlayback);
+
+    // 4. Playlist Boyutlandırma (Grip Drag)
+    const playlist = document.getElementById('playlistWindow');
+    const grip = document.getElementById('plResizeGrip');
+    let isResizing = false;
+    let startX, startY, startW, startH;
+
+    grip.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = playlist.offsetWidth;
+      startH = playlist.offsetHeight;
+      document.body.style.cursor = 'nwse-resize';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const newW = Math.max(275, startW + (e.clientX - startX));
+      const newH = Math.max(116, startH + (e.clientY - startY));
+      playlist.style.width = newW + 'px';
+      playlist.style.height = newH + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = 'default';
+      }
+    });
+
+    // 5. Layout Değiştirici: Yan Yana vs Klasik Dikey (Her ikisinde de 0px Kenetlenme!)
+    const layoutShell = document.getElementById('layoutShell');
+    const leftColumn = document.getElementById('leftColumn');
+    const btnSide = document.getElementById('btnSideLayout');
+    const btnStack = document.getElementById('btnStackLayout');
+
+    btnSide.addEventListener('click', () => {
+      // Yan Yana: Sol sütun (Main + EQ: 232px), Sağ sütun Playlist (232px) - 0px boşluk
+      layoutShell.className = 'flex flex-row items-start';
+      layoutShell.style.gap = '0px';
+      leftColumn.className = 'flex flex-col items-start shrink-0 w-[275px]';
+      leftColumn.style.gap = '0px';
+      
+      if (!leftColumn.contains(document.getElementById('mainWindow'))) {
+        leftColumn.appendChild(document.getElementById('mainWindow'));
+        leftColumn.appendChild(document.getElementById('eqWindow'));
+      }
+      layoutShell.appendChild(playlist);
+      playlist.style.width = '275px';
+      playlist.style.height = '232px'; // Main(116) + EQ(116) = 232px eşitliği
+
+      btnSide.className = 'px-2.5 py-1 rounded bg-zinc-700 text-white font-medium';
+      btnStack.className = 'px-2.5 py-1 rounded text-zinc-400 hover:text-white';
+    });
+
+    btnStack.addEventListener('click', () => {
+      // Klasik Dikey: Tek sütunda 0px boşlukla Main -> EQ -> Playlist
+      layoutShell.className = 'flex flex-col items-start';
+      layoutShell.style.gap = '0px';
+      leftColumn.className = 'flex flex-col items-start shrink-0 w-[275px]';
+      leftColumn.style.gap = '0px';
+      leftColumn.appendChild(playlist);
+      playlist.style.width = '275px';
+      playlist.style.height = '140px';
+
+      btnStack.className = 'px-2.5 py-1 rounded bg-zinc-700 text-white font-medium';
+      btnSide.className = 'px-2.5 py-1 rounded text-zinc-400 hover:text-white';
+    });
+
+    // 6. EQ Açma/Kapama
+    const toggleEQBtn = document.getElementById('toggleEQBtn');
+    const eqCloseBtn = document.getElementById('eqCloseBtn');
+    const eqWindow = document.getElementById('eqWindow');
+    let isEQVisible = true;
+
+    function setEQVisibility(visible) {
+      isEQVisible = visible;
+      if (isEQVisible) {
+        eqWindow.style.display = 'block';
+        toggleEQBtn.className = 'wa-btn text-emerald-400 bg-[#162916] border-emerald-600';
+      } else {
+        eqWindow.style.display = 'none';
+        toggleEQBtn.className = 'wa-btn text-zinc-500 bg-[#1e1f24] border-zinc-700';
+      }
+    }
+
+    toggleEQBtn.addEventListener('click', () => {
+      setEQVisibility(!isEQVisible);
+    });
+
+    if (eqCloseBtn) {
+      eqCloseBtn.addEventListener('click', () => {
+        setEQVisibility(false);
+      });
+    }
+
+    // 7. Playlist Açma/Kapama
+    const togglePLBtn = document.getElementById('togglePLBtn');
+    const plCloseBtn = document.getElementById('plCloseBtn');
+    let isPLVisible = true;
+
+    function setPLVisibility(visible) {
+      isPLVisible = visible;
+      if (isPLVisible) {
+        playlist.style.display = 'flex';
+        togglePLBtn.className = 'wa-btn text-yellow-400 bg-[#292416] border-yellow-600';
+      } else {
+        playlist.style.display = 'none';
+        togglePLBtn.className = 'wa-btn text-zinc-500 bg-[#1e1f24] border-zinc-700';
+      }
+    }
+
+    togglePLBtn.addEventListener('click', () => {
+      setPLVisibility(!isPLVisible);
+    });
+
+    if (plCloseBtn) {
+      plCloseBtn.addEventListener('click', () => {
+        setPLVisibility(false);
+      });
+    }
+  </script>
+</body>
+</html>
