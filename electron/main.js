@@ -1,10 +1,10 @@
-import { app, BrowserWindow, globalShortcut, Tray, Menu } from 'electron';
-import path from 'path';
+const { app, BrowserWindow, globalShortcut, Tray, Menu } = require('electron');
+const path = require('path');
 
-let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
+let mainWindow = null;
+let tray = null;
 
-const createWindow = () => {
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 620,
     height: 380,
@@ -24,29 +24,35 @@ const createWindow = () => {
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL('http://localhost:3000').catch(() => {
+      mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Register Global Hotkeys
-  globalShortcut.register('MediaPlayPause', () => {
-    mainWindow?.webContents.send('media-play-pause');
-  });
-  globalShortcut.register('MediaNextTrack', () => {
-    mainWindow?.webContents.send('media-next');
-  });
-  globalShortcut.register('MediaPreviousTrack', () => {
-    mainWindow?.webContents.send('media-prev');
-  });
-  globalShortcut.register('MediaStop', () => {
-    mainWindow?.webContents.send('media-stop');
-  });
+  // Register Global Hotkeys (when active)
+  try {
+    globalShortcut.register('MediaPlayPause', () => {
+      mainWindow?.webContents.send('media-play-pause');
+    });
+    globalShortcut.register('MediaNextTrack', () => {
+      mainWindow?.webContents.send('media-next');
+    });
+    globalShortcut.register('MediaPreviousTrack', () => {
+      mainWindow?.webContents.send('media-prev');
+    });
+    globalShortcut.register('MediaStop', () => {
+      mainWindow?.webContents.send('media-stop');
+    });
+  } catch {
+    // Ignore shortcut registration errors on headless/CI
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-};
+}
 
 app.whenReady().then(() => {
   createWindow();
@@ -86,7 +92,9 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
+  try {
+    globalShortcut.unregisterAll();
+  } catch {}
 });
 
 app.on('window-all-closed', () => {
