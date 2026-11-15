@@ -4,6 +4,7 @@ import { Equalizer } from './components/Equalizer/Equalizer';
 import { Playlist } from './components/Playlist/Playlist';
 import { AboutModal } from './components/AboutModal/AboutModal';
 import { AddUrlModal } from './components/AddUrlModal/AddUrlModal';
+import { TrackInfoModal } from './components/TrackInfoModal/TrackInfoModal';
 import { Track, PlaybackState, LayoutMode } from './types/winamp';
 import { audio } from './audio/AudioEngine';
 
@@ -59,6 +60,7 @@ export const App: React.FC = () => {
   const [isPLVisible, setIsPLVisible] = useState(true);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
+  const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
   // 1.5x scaling mode (Ctrl+D)
   const [isDoubleSize, setIsDoubleSize] = useState(false);
@@ -613,6 +615,9 @@ export const App: React.FC = () => {
               onTogglePL={() => setIsPLVisible(!isPLVisible)}
               onOpenAbout={() => setIsAboutOpen(true)}
               onOpenFile={() => hiddenFileInputRef.current?.click()}
+              isDoubleSize={isDoubleSize}
+              onToggleDoubleSize={() => setIsDoubleSize((prev) => !prev)}
+              onOpenTrackInfo={() => setIsTrackInfoOpen(true)}
             />
 
             {/* 2. Equalizer Window (275x116px) - Sits directly below Main with 0px gap */}
@@ -677,6 +682,12 @@ export const App: React.FC = () => {
 
       {/* Modals */}
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <TrackInfoModal
+        isOpen={isTrackInfoOpen}
+        onClose={() => setIsTrackInfoOpen(false)}
+        track={currentTrack}
+        duration={playback.duration}
+      />
       <AddUrlModal
         isOpen={isUrlModalOpen}
         onClose={() => setIsUrlModalOpen(false)}

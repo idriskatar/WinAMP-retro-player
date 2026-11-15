@@ -21,7 +21,20 @@ interface MainWindowProps {
   onTogglePL: () => void;
   onOpenAbout: () => void;
   onOpenFile: () => void;
+  isDoubleSize: boolean;
+  onToggleDoubleSize: () => void;
+  onOpenTrackInfo: () => void;
 }
+
+type VisualizerMode = 'spectrum' | 'oscilloscope' | 'off';
+
+const VISUALIZER_MODES: VisualizerMode[] = ['spectrum', 'oscilloscope', 'off'];
+
+const VISUALIZER_LABELS: Record<VisualizerMode, string> = {
+  spectrum: 'Spectrum analizörü',
+  oscilloscope: 'Osiloskop',
+  off: 'Kapalı',
+};
 
 export const MainWindow: React.FC<MainWindowProps> = ({
   playback,
@@ -42,12 +55,58 @@ export const MainWindow: React.FC<MainWindowProps> = ({
   onTogglePL,
   onOpenAbout,
   onOpenFile,
+  isDoubleSize,
+  onToggleDoubleSize,
+  onOpenTrackInfo,
 }) => {
   const visCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const optionsRef = useRef<HTMLDivElement | null>(null);
   const [timeModeRemaining, setTimeModeRemaining] = React.useState(false);
   const [isShaded, setIsShaded] = React.useState(false);
+  const [vizMode, setVizMode] = React.useState<VisualizerMode>('spectrum');
+  const [alwaysOnTop, setAlwaysOnTop] = React.useState(false);
+  const [isOptionsOpen, setIsOptionsOpen] = React.useState(false);
 
-  // 60 FPS Visualizer Animation Loop
+  const toggleAlwaysOnTop = () => {
+    const next = !alwaysOnTop;
+    setAlwaysOnTop(next);
+    window.electronAPI?.setAlwaysOnTop(next);
+  };
+
+  const cycleVisualizer = () => {
+    setVizMode((mode) => {
+      const index = VISUALIZER_MODES.indexOf(mode);
+      return VISUALIZER_MODES[(index + 1) % VISUALIZER_MODES.length];
+    });
+  };
+
+  // Close the options menu when clicking outside it or pressing Escape.
+  useEffect(() => {
+    if (!isOptionsOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) {
+        setIsOptionsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOptionsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOptionsOpen]);
+
+  // The clutterbar is hidden while shaded; never leave its menu "open".
+  useEffect(() => {
+    if (isShaded) setIsOptionsOpen(false);
+  }, [isShaded]);
+
+  // Visualizer: spectrum bars, oscilloscope trace, or off (V cycles them).
   useEffect(() => {
     let animId = 0;
     const canvas = visCanvasRef.current;
@@ -59,11 +118,15 @@ export const MainWindow: React.FC<MainWindowProps> = ({
     const barHeights = new Array(numBars).fill(2);
     const peakHeights = new Array(numBars).fill(2);
     const freqData = new Uint8Array(new ArrayBuffer(256));
+    const timeData = new Uint8Array(new ArrayBuffer(256));
 
-    const drawFrame = (active: boolean) => {
+    const clear = () => {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
 
+    const drawSpectrum = (active: boolean) => {
+      clear();
       if (active) {
         audio.getFrequencyData(freqData);
       }
@@ -109,8 +172,37 @@ export const MainWindow: React.FC<MainWindowProps> = ({
       }
     };
 
-    // Idle: draw one flat frame and stop the animation loop entirely.
-    if (!playback.isPlaying) {
+    const drawOscilloscope = (active: boolean) => {
+      clear();
+      if (active) {
+        audio.getTimeDomainData(timeData);
+      }
+
+      ctx.strokeStyle = '#00FF44';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 0; x < canvas.width; x++) {
+        const sampleIndex = Math.floor((x / canvas.width) * timeData.length);
+        const value = active ? timeData[sampleIndex] ?? 128 : 128;
+        const y = Math.max(0.5, Math.min(canvas.height - 0.5, (value / 255) * canvas.height));
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+
+    const drawFrame = (active: boolean) => {
+      if (vizMode === 'off') {
+        clear();
+      } else if (vizMode === 'oscilloscope') {
+        drawOscilloscope(active);
+      } else {
+        drawSpectrum(active);
+      }
+    };
+
+    // Idle or disabled: draw one static frame and stop the animation loop.
+    if (!playback.isPlaying || vizMode === 'off') {
       barHeights.fill(2);
       peakHeights.fill(2);
       drawFrame(false);
@@ -124,7 +216,7 @@ export const MainWindow: React.FC<MainWindowProps> = ({
 
     render();
     return () => cancelAnimationFrame(animId);
-  }, [playback.isPlaying]);
+  }, [playback.isPlaying, vizMode]);
 
   // Format time mm:ss
   const formatTime = (seconds: number) => {
@@ -203,14 +295,114 @@ export const MainWindow: React.FC<MainWindowProps> = ({
         <>
           {/* Clutterbar (O, A, I, D, V) - x: 8, y: 18 */}
           <div
-            className="absolute"
+            className="absolute z-20"
             style={{ left: 8, top: 18, width: 10, display: 'flex', flexDirection: 'column', gap: 1 }}
           >
-            <button className="wa-btn" style={{ width: 10, height: 7, fontSize: 6 }}>O</button>
-            <button className="wa-btn" style={{ width: 10, height: 7, fontSize: 6 }}>A</button>
-            <button className="wa-btn" style={{ width: 10, height: 7, fontSize: 6 }}>I</button>
-            <button className="wa-btn" style={{ width: 10, height: 7, fontSize: 6 }}>D</button>
-            <button className="wa-btn" style={{ width: 10, height: 7, fontSize: 6 }}>V</button>
+            <div className="relative" ref={optionsRef}>
+              <button
+                type="button"
+                className={`wa-btn ${isOptionsOpen ? 'text-yellow-300' : ''}`}
+                style={{ width: 10, height: 7, fontSize: 6 }}
+                title="Seçenekler menüsü"
+                onClick={() => setIsOptionsOpen((open) => !open)}
+              >
+                O
+              </button>
+
+              {isOptionsOpen && (
+                <div
+                  className="wa-window absolute flex flex-col"
+                  style={{ left: 13, top: 8, width: 150, padding: 2, zIndex: 40 }}
+                >
+                  <div
+                    className="px-1 text-[7px] font-mono text-zinc-300 hover:bg-[#2f4a8f] hover:text-white cursor-pointer"
+                    style={{ lineHeight: '12px' }}
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      onOpenAbout();
+                    }}
+                  >
+                    Hakkında
+                  </div>
+                  <div className="my-[2px] h-px bg-[#4a4c54]" />
+                  <div
+                    className="px-1 text-[7px] font-mono text-zinc-300 hover:bg-[#2f4a8f] hover:text-white cursor-pointer"
+                    style={{ lineHeight: '12px' }}
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      onOpenFile();
+                    }}
+                  >
+                    Dosya Aç…
+                  </div>
+                  <div
+                    className="px-1 text-[7px] font-mono text-zinc-300 hover:bg-[#2f4a8f] hover:text-white cursor-pointer"
+                    style={{ lineHeight: '12px' }}
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      onOpenTrackInfo();
+                    }}
+                  >
+                    Parça Bilgisi
+                  </div>
+                  <div className="my-[2px] h-px bg-[#4a4c54]" />
+                  <div
+                    className="px-1 flex items-center justify-between text-[7px] font-mono text-zinc-300 hover:bg-[#2f4a8f] hover:text-white cursor-pointer"
+                    style={{ lineHeight: '12px' }}
+                    onClick={() => {
+                      toggleAlwaysOnTop();
+                      setIsOptionsOpen(false);
+                    }}
+                  >
+                    <span>Her Zaman Üstte</span>
+                    <span className="text-emerald-400">{alwaysOnTop ? '✓' : ''}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className={`wa-btn ${alwaysOnTop ? 'text-emerald-300' : ''}`}
+              style={{ width: 10, height: 7, fontSize: 6 }}
+              title={alwaysOnTop ? 'Her zaman üstte: açık' : 'Her zaman üstte'}
+              onClick={toggleAlwaysOnTop}
+            >
+              A
+            </button>
+            <button
+              type="button"
+              className="wa-btn"
+              style={{ width: 10, height: 7, fontSize: 6 }}
+              title="Parça bilgisi"
+              onClick={onOpenTrackInfo}
+            >
+              I
+            </button>
+            <button
+              type="button"
+              className={`wa-btn ${isDoubleSize ? 'text-emerald-300' : ''}`}
+              style={{ width: 10, height: 7, fontSize: 6 }}
+              title={isDoubleSize ? '1.5x boyut: açık' : '1.5x boyut (Ctrl+D)'}
+              onClick={onToggleDoubleSize}
+            >
+              D
+            </button>
+            <button
+              type="button"
+              className={`wa-btn ${
+                vizMode === 'oscilloscope'
+                  ? 'text-emerald-300'
+                  : vizMode === 'off'
+                    ? 'text-zinc-600'
+                    : ''
+              }`}
+              style={{ width: 10, height: 7, fontSize: 6 }}
+              title={`Görselleştirici: ${VISUALIZER_LABELS[vizMode]}`}
+              onClick={cycleVisualizer}
+            >
+              V
+            </button>
           </div>
 
           {/* LCD Display Box - x: 22, y: 18, w: 245, h: 42 */}

@@ -15,6 +15,7 @@ graph TD
         PL[Playlist min 275x116, resizable]
         URL[AddUrlModal]
         About[AboutModal]
+        Info[TrackInfoModal]
     end
 
     subgraph Audio - Web Audio API
@@ -40,6 +41,7 @@ graph TD
     App --> PL
     App --> URL
     App --> About
+    App --> Info
     App -- load/play/pause/seek/volume/EQ --> El
     El --> Src --> Pre --> Bands --> Pan --> Master --> An --> Out
     An -- spectrum bytes --> MW
@@ -113,8 +115,8 @@ Ses seviyesi, balance, preamp, bant kazançları ve EQ açık/kapalı durumu mot
 ### Demo synth
 Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDemoSynthBeat()` 180 ms'lik adımlarla akor + bas osilatörleri üretir; çıkış preamp/master zincirinden geçtiği için volume, EQ ve spectrum çalışır. Gerçek bir parçaya geçildiğinde synth durdurulur.
 
-### Spektrum
-`AnalyserNode.getByteFrequencyData` ile 256 bayt okunur; ilk 64 bin 18 çubuğa eşlenir. Oynatma durduğunda animasyon döngüsü tamamen durur (boşuna 60 FPS çalışmaz).
+### Spektrum ve osiloskop
+`AnalyserNode.getByteFrequencyData` ile 256 bayt okunur; ilk 64 bin 18 çubuğa eşlenir. Clutterbar'daki **V** düğmesi spectrum → osiloskop (`getByteTimeDomainData`) → kapalı arasında döner; kapalıyken tuval siyah kalır. Oynatma durduğunda veya görselleştirici kapalıyken animasyon döngüsü tamamen durur (boşuna 60 FPS çalışmaz), yalnızca tek bir statik kare çizilir.
 
 ---
 
@@ -127,7 +129,7 @@ Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDem
 - **Tepsi**: ikon, oynat/durdur/sonraki/önceki, göster ve çıkış. Tepsi oluşturulamazsa uygulama pencere kapanınca normal şekilde çıkar.
 - **Kapatma davranışı**: tepsi varsa pencere gizlenir (`close` engellenir); tam çıkış tepsi menüsünden veya `before-quit` ile olur.
 - **Global kısayollar**: `MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop` bir kez kaydedilir, `will-quit`'te temizlenir.
-- **IPC**: `window:minimize`, `window:close` (renderer'daki sahte başlık çubuğu düğmeleri).
+- **IPC**: `window:minimize`, `window:close`, `window:always-on-top` (renderer'daki sahte başlık çubuğu ve clutterbar düğmeleri).
 - **İkon yolu**: geliştirmede `build/`, paketlenmiş uygulamada `process.resourcesPath` (electron-builder `extraResources` ile kopyalanır).
 - DevTools yalnızca paketlenmemiş geliştirme derlemesinde açılabilir.
 
@@ -138,6 +140,7 @@ Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDem
 | --- | --- |
 | `onMediaPlayPause/Next/Prev/Stop(cb)` | Abonelik; her biri bir `unsubscribe` fonksiyonu döndürür |
 | `minimizeWindow()` / `closeWindow()` | Pencere kontrolleri |
+| `setAlwaysOnTop(enabled)` | Clutterbar **A** düğmesi; pencereyi her zaman üstte tutar |
 | `isElectron` | Ortam ayırt etmek için |
 
 Renderer tarafındaki dinleyiciler `src/App.tsx` içinde bir kez kurulur ve unmount'ta temizlenir.

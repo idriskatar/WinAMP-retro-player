@@ -112,14 +112,15 @@ body {
   transform: translateY(0.5px);
 }
 
-/* Seekbar (Posbar) */
+/* Seekbar (Posbar) — konumlandırma Tailwind `absolute` sınıfından gelir.
+   Burada `position` tanımlanmamalı, aksi halde eleman akışa düşer ve
+   volume/balance satırının üstüne biner. */
 .wa-posbar-track {
   background-color: #000000;
   border-top: 1px solid #08090a;
   border-left: 1px solid #08090a;
   border-right: 1px solid #43454c;
   border-bottom: 1px solid #43454c;
-  position: relative;
   cursor: pointer;
 }
 .wa-posbar-thumb {

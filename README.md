@@ -14,6 +14,8 @@ React + TypeScript + Web Audio API + Electron ile geliştirilmiş, 90'ların efs
 - **İki yerleşim**: yan yana (Main + EQ solda, Playlist sağda) ve klasik dikey yığın. Pencereler arasında 0 px boşluk.
 - **Windowshade**: başlık çubuğuna çift tıklayınca pencere 14 px'lik mini bara döner.
 - **1.5x büyütme** (`Ctrl+D`) — yüksek DPI ekranlarda okunabilirlik için görsel ölçekleme.
+- **Clutterbar (O / A / I / D / V)**: seçenekler menüsü, her zaman üstte, parça bilgisi, 1.5x boyut ve görselleştirici döngüsü (spectrum → osiloskop → kapalı).
+- **Parça bilgisi penceresi (I)**: başlık, sanatçı, süre, kaynak türü; yerel dosyalarda ad/boyut/MIME, akışlarda URL.
 - Orijinal renk paleti, 3D kabartmalı çerçeveler, yeşil LCD, kayan şarkı yazısı ve spectrum analizörü.
 
 ### Ses
@@ -92,6 +94,8 @@ npm start
 | `Alt+W` | Playlist'i göster/gizle |
 | Başlığa çift tık | Windowshade |
 
+Ana penceredeki **clutterbar** düğmeleri: **O** seçenekler menüsü, **A** her zaman üstte (Electron), **I** parça bilgisi, **D** 1.5x boyut, **V** görselleştirici döngüsü.
+
 ---
 
 ## 📂 Proje Yapısı
@@ -108,7 +112,7 @@ WinAMP-retro-player/
 │  └─ preload.js                 # contextBridge API (medya tuşları, pencere kontrolleri)
 ├─ src/
 │  ├─ audio/AudioEngine.ts       # Web Audio grafiği + HTMLAudioElement yaşam döngüsü
-│  ├─ components/                # MainWindow, Equalizer, Playlist, AboutModal, AddUrlModal
+│  ├─ components/                # MainWindow, Equalizer, Playlist, AboutModal, AddUrlModal, TrackInfoModal
 │  ├─ types/                     # Track / PlaybackState / Window tipleri
 │  ├─ App.tsx                    # Oynatma durumu, playlist ve yerleşim yönetimi
 │  └─ index.css                  # Winamp 2.9x görsel dili

@@ -13,6 +13,7 @@ declare global {
       onMediaStop: (callback: () => void) => Unsubscribe;
       minimizeWindow: () => void;
       closeWindow: () => void;
+      setAlwaysOnTop: (enabled: boolean) => void;
     };
   }
 }

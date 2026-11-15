@@ -163,6 +163,11 @@ ipcMain.on('window:close', () => {
   }
 });
 
+ipcMain.on('window:always-on-top', (_event, enabled) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.setAlwaysOnTop(Boolean(enabled));
+});
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {

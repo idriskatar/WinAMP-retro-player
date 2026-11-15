@@ -18,4 +18,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMediaStop: (callback) => onMediaCommand('media-stop', callback),
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
+  setAlwaysOnTop: (enabled) => ipcRenderer.send('window:always-on-top', Boolean(enabled)),
 });
