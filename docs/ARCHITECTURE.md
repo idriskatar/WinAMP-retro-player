@@ -30,7 +30,7 @@ graph TD
     end
 
     subgraph Electron Main
-        Win[BrowserWindow 610x380]
+        Win[BrowserWindow 275x464 frameless]
         Tray[Tray + Menu]
         Keys[globalShortcut media keys]
         IPC[ipcMain window controls]
@@ -50,7 +50,7 @@ graph TD
     IPC -- window:minimize/close --> Win
 ```
 
-Tek bir Electron penceresi vardır. Main, EQ ve Playlist "pencereleri" aynı React ağacında CSS ile çizilen panellerdir; ayrı OS pencereleri veya sürükleme/kenetlenme motoru yoktur.
+Tek bir Electron penceresi vardır. Main, EQ ve Playlist "pencereleri" aynı React ağacında CSS ile çizilen panellerdir; ekstra başlık, araç çubuğu veya panel olmadan 275 px genişlikte dikey olarak 0 px boşlukla yığılırlar. Electron penceresi kenarlıksızdır (`frame: false`); ayrı OS pencereleri, sürükleme/kenetlenme motoru yoktur. Pencereyi taşımak için başlık çubukları `-webkit-app-region: drag` kullanır.
 
 ---
 
@@ -66,7 +66,7 @@ Oynatma ile ilgili tüm görünür durum `src/App.tsx` içindeki `playback` stat
 | `volume` / `balance` | 0–100 ve -50..+50 |
 | `shuffle` / `repeat` | Sıradaki parça seçimini ve playlist döngüsünü belirler |
 
-`tracks`, `currentTrackIndex`, `layoutMode`, pencere görünürlükleri ve playlist boyutları da aynı bileşende tutulur. Klavye, Electron medya tuşları ve ses olayları eski closure'lara düşmesin diye güncel değerler `tracksRef`, `playbackRef`, `currentIndexRef` üzerinden okunur.
+`tracks`, `currentTrackIndex`, pencere görünürlükleri ve playlist boyutları da aynı bileşende tutulur. Klavye, Electron medya tuşları ve ses olayları eski closure'lara düşmesin diye güncel değerler `tracksRef`, `playbackRef`, `currentIndexRef` üzerinden okunur.
 
 ### Olay akışı
 1. Kullanıcı bir parçaya çift tıklar → `startTrack(index)`.
@@ -80,6 +80,9 @@ Oynatma ile ilgili tüm görünür durum `src/App.tsx` içindeki `playback` stat
 5. Demo parçalarda (dosya/URL yok) `ended` yerine 1 saniyelik sayaç çalışır ve süre dolunca aynı `handleTrackEnd()` çağrılır.
 
 Manuel `Next`/`Previous` her zaman çalar; otomatik geçişte son parçadan sonra `repeat` kapalıysa oynatma durur.
+
+### Playlist kaydırma çubuğu
+Liste kaydırma alanı native scrollbar'ı gizler (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`), çünkü Chromium bazı platformlarda overlay scrollbar'a düşüp `::-webkit-scrollbar` temalamasını yok sayar. Bunun yerine `Playlist.tsx` içinde `.wa-scrollbar` / `.wa-scrollbar-thumb` çizilir: `scroll` olayı ve `ResizeObserver` thumb yüksekliğini/konumunu günceller; thumb sürükleme ve track'e tıklama `scrollTop`'u hesaplar. Görünüm `index.css` içindeki metal gradyan/bevel kurallarıyla Winamp pencereleriyle eşleşir.
 
 ---
 
@@ -124,7 +127,7 @@ Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDem
 
 ### `electron/main.js`
 - **Tek örnek**: `app.requestSingleInstanceLock()`; ikinci örnek mevcut pencereyi öne getirir.
-- **Pencere**: 610×380, min 290×160, `contextIsolation: true`, `nodeIntegration: false`, `webSecurity` varsayılan (açık).
+- **Pencere**: kenarlıksız (`frame: false`), 275×464 (Main 116 + EQ 116 + Playlist 232), min 275×160, `backgroundColor: '#0d0e10'`, `contextIsolation: true`, `nodeIntegration: false`, `webSecurity` varsayılan (açık). Başlık çubukları `-webkit-app-region: drag` ile pencereyi taşır; `.wa-tbtn` ve tıklanabilir başlık içerikleri `no-drag`.
 - **Geliştirme/production**: `VITE_DEV_SERVER_URL` varsa Vite sunucusu, yoksa `dist/index.html` yüklenir.
 - **Tepsi**: ikon, oynat/durdur/sonraki/önceki, göster ve çıkış. Tepsi oluşturulamazsa uygulama pencere kapanınca normal şekilde çıkar.
 - **Kapatma davranışı**: tepsi varsa pencere gizlenir (`close` engellenir); tam çıkış tepsi menüsünden veya `before-quit` ile olur.
@@ -165,9 +168,9 @@ Renderer tarafındaki dinleyiciler `src/App.tsx` içinde bir kez kurulur ve unmo
 
 ## 6. Bilinen Mimari Sınırlar
 
-- Pencereler tek BrowserWindow içinde çizilir; çoklu pencere, manyetik kenetlenme ve grup sürükleme yoktur.
-- `Ctrl+D` gerçek bir yeniden düzenleme değil, CSS `transform: scale(1.5)` uygular; Electron penceresi büyümez.
-- Playlist yüksekliği yan yana düzende EQ görünürlüğüne göre otomatik ayarlanır, kullanıcı resize'ı bu modda temel yüksekliğe dönebilir.
+- Pencereler tek BrowserWindow içinde çizilir; çoklu pencere, manyetik kenetlenme ve grup sürükleme yoktur. Yerleşim her zaman dikey yığındır.
+- Kenarlıksız pencerede başlık çubuğu sürükleme bölgesi olduğu için çift tıklayla windowshade Electron'da çalışmaz; `▢` düğmesi kullanılır.
+- `Ctrl+D` gerçek bir yeniden düzenleme değil, CSS `transform: scale(1.5)` uygular; Electron penceresi büyümez, içerik kaydırılır.
 - Demo parçalar dosya içermediği için süreleri sabittir ve ses sentetiktir.
 - macOS paketleri imzasız/notarize edilmemiştir.
 - Electron 33 desteği sona ermiştir; güncel major sürüme geçiş planlanmaktadır.

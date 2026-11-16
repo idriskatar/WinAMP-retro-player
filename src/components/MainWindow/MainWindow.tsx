@@ -258,7 +258,7 @@ export const MainWindow: React.FC<MainWindowProps> = ({
     >
       {/* Titlebar (y: 0, h: 14) */}
       <div className="wa-titlebar" onDoubleClick={() => setIsShaded(!isShaded)}>
-        <div className="flex items-center gap-1 z-10 cursor-pointer" onClick={onOpenAbout}>
+        <div className="flex items-center gap-1 z-10 cursor-pointer wa-nodrag" onClick={onOpenAbout}>
           <svg className="w-2.5 h-2.5 text-yellow-400 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
             <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" />
           </svg>

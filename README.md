@@ -11,8 +11,9 @@ React + TypeScript + Web Audio API + Electron ile geliştirilmiş, 90'ların efs
 ### Arayüz
 - **Sabit boyutlu ana pencere ve ekolayzer**: her biri tam **275 × 116 px**.
 - **Boyutlandırılabilir playlist**: minimum 275 × 116 px, sağ alt köşeden sürüklenerek büyütülür.
-- **İki yerleşim**: yan yana (Main + EQ solda, Playlist sağda) ve klasik dikey yığın. Pencereler arasında 0 px boşluk.
-- **Windowshade**: başlık çubuğuna çift tıklayınca pencere 14 px'lik mini bara döner.
+- **Sadece oyuncu arayüzü**: ana pencere, ekolayzer ve playlist 275 px genişlikte dikey olarak 0 px boşlukla yığılır; ekstra başlık, panel veya çerçeve yoktur. Masaüstünde pencere kenarlıksız (frameless) açılır.
+- **Windowshade**: başlık çubuğundaki ▢ düğmesi pencereyi 14 px'lik mini bara döndürür (tarayıcıda başlığa çift tıklama da çalışır).
+- **Temalı playlist kaydırma çubuğu**: Winamp'ın metal düğme görünümüyle uyumlu, sürüklenebilir ve track'e tıklayarak sayfa atlayan özel çubuk (native overlay scrollbar'lar temalandırılamadığı için gizlenir).
 - **1.5x büyütme** (`Ctrl+D`) — yüksek DPI ekranlarda okunabilirlik için görsel ölçekleme.
 - **Clutterbar (O / A / I / D / V)**: seçenekler menüsü, her zaman üstte, parça bilgisi, 1.5x boyut ve görselleştirici döngüsü (spectrum → osiloskop → kapalı).
 - **Parça bilgisi penceresi (I)**: başlık, sanatçı, süre, kaynak türü; yerel dosyalarda ad/boyut/MIME, akışlarda URL.
@@ -28,6 +29,7 @@ React + TypeScript + Web Audio API + Electron ile geliştirilmiş, 90'ların efs
 - **Dahili retro synth**: paketle gelen 6 demo parça gerçek ses dosyası içermez; çalındıklarında 90'lar tarzı prosedürel synth beat üretilir. Kendi dosyalarınız her zaman gerçek ses olarak çalar.
 
 ### Masaüstü (Electron)
+- **Kenarlıksız (frameless) pencere**: işletim sistemi çerçevesi ve menü çubuğu yok; pencere yalnızca Winamp panellerinden oluşur. Başlık çubuklarından sürüklenir.
 - **Sistem tepsisi**: göster/gizle, oynat/duraklat, durdur, sonraki/önceki, çıkış.
 - **Global medya tuşları**: Play/Pause, Next, Previous, Stop — uygulama arka plandayken de çalışır.
 - **Tek örnek kilidi**: ikinci kez açıldığında mevcut pencere öne gelir.
@@ -92,7 +94,8 @@ npm start
 | `Ctrl+D` | 1.5x büyütme |
 | `Alt+G` | Ekolayzeri göster/gizle |
 | `Alt+W` | Playlist'i göster/gizle |
-| Başlığa çift tık | Windowshade |
+| Başlıktaki ▢ | Windowshade |
+| Başlık çubuğunu sürükle | Pencereyi taşı (Electron) |
 
 Ana penceredeki **clutterbar** düğmeleri: **O** seçenekler menüsü, **A** her zaman üstte (Electron), **I** parça bilgisi, **D** 1.5x boyut, **V** görselleştirici döngüsü.
 
@@ -127,7 +130,7 @@ WinAMP-retro-player/
 
 ## 🧱 Mimari Özeti
 
-- **Renderer**: Tek React ağacı içinde üç "pencere" bileşeni. Yerleşim CSS flex ile kurulur; bu sürümde ayrı OS pencereleri, manyetik kenetlenme veya grup sürükleme yoktur.
+- **Renderer**: Tek React ağacı içinde üç "pencere" bileşeni; 275 px genişlikte dikey yığın olarak çizilir ve sayfa üzerinde başka arayüz yoktur. Electron tarafında pencere kenarlıksızdır. Bu sürümde ayrı OS pencereleri, manyetik kenetlenme veya grup sürükleme yoktur.
 - **Ses**: `HTMLAudioElement → MediaElementSource → Preamp → 10 × BiquadFilter → StereoPanner → MasterGain → Analyser → Destination`.
 - **Durum**: Oynatma durumu `App.tsx` içinde tutulur; motor olayları (`timeupdate`, `durationchange`, `ended`, `error`) callback'lerle React'e akar.
 - **Electron**: `preload.js` yalnızca dar bir API yüzeyi açar (`contextIsolation: true`, `nodeIntegration: false`); dosyalar renderer'da `blob:` URL olarak yüklenir, `webSecurity` kapatılmaz.
@@ -150,7 +153,8 @@ git push origin v1.0.0
 
 ## 📋 Bilinen Sınırlar
 
-- Winamp'ın çoklu pencere (Main / EQ / PL ayrı OS pencereleri) ve manyetik kenetlenme davranışı henüz uygulanmadı; hepsi tek pencere içinde çizilir.
+- Winamp'ın çoklu pencere (Main / EQ / PL ayrı OS pencereleri) ve manyetik kenetlenme davranışı henüz uygulanmadı; hepsi tek pencere içinde, dikey yığın olarak çizilir.
+- Kenarlıksız pencerede başlık çubuğu sürükleme alanı olduğu için çift tıklayla windowshade Electron'da çalışmaz; `▢` düğmesi kullanılır.
 - `m3u` / `pls` çalma listesi dosyaları ve ID3 etiket düzenleme yoktur.
 - Tarayıcı/Chromium codec desteği geçerlidir; her format her platformda çalmayabilir.
 - Electron 33 kullanılmaktadır; güncel Electron sürümüne yükseltme ayrı bir iş olarak planlanmıştır.

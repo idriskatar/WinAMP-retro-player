@@ -5,7 +5,7 @@ import { Playlist } from './components/Playlist/Playlist';
 import { AboutModal } from './components/AboutModal/AboutModal';
 import { AddUrlModal } from './components/AddUrlModal/AddUrlModal';
 import { TrackInfoModal } from './components/TrackInfoModal/TrackInfoModal';
-import { Track, PlaybackState, LayoutMode } from './types/winamp';
+import { Track, PlaybackState } from './types/winamp';
 import { audio } from './audio/AudioEngine';
 
 const INITIAL_TRACKS: Track[] = [
@@ -53,7 +53,6 @@ const isDemoSource = (track: Track | null | undefined) => !!track && !track.file
 export const App: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('side-by-side');
 
   // Window visibilities
   const [isEQVisible, setIsEQVisible] = useState(true);
@@ -465,13 +464,6 @@ export const App: React.FC = () => {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe?.());
   }, []);
 
-  // Playlist height follows the main+EQ stack in side-by-side mode.
-  useEffect(() => {
-    if (layoutMode === 'side-by-side') {
-      setPlaylistHeight(isEQVisible ? 232 : 116);
-    }
-  }, [layoutMode, isEQVisible]);
-
   useEffect(() => {
     if (!audioError) return;
     const timer = window.setTimeout(() => setAudioError(null), 6000);
@@ -480,7 +472,7 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-[#111215] text-[#c2c4cb] p-3 flex flex-col items-center select-none font-sans text-xs"
+      className="min-h-screen w-full bg-[#0d0e10] flex items-start select-none font-sans text-xs overflow-auto"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -500,184 +492,64 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Top Bar with Branding, Layout Modes & Scaling Toggle */}
-      <div className="w-full max-w-4xl flex items-center justify-between pb-2 mb-3 border-b border-[#25272e]">
-        <div className="flex items-center gap-2">
-          {/* Classic Winamp Lightning Icon */}
-          <div
-            onClick={() => setIsAboutOpen(true)}
-            className="w-7 h-7 bg-[#081233] rounded border border-yellow-500/60 flex items-center justify-center shadow-[0_0_8px_rgba(234,179,8,0.4)] cursor-pointer"
-            title="Winamp Hakkında"
-          >
-            <svg className="w-4 h-4 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
-              WinAMP 2.9x Retro Player
-              <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-700/80 px-1.5 py-0.5 rounded font-mono">
-                Cross-Platform
-              </span>
-            </h1>
-            <p className="text-[11px] text-zinc-400">
-              Windows • macOS • Linux | 0px birleşik yerleşim & Web Audio 10-Bant EQ
-            </p>
-          </div>
-        </div>
-
-        {/* Layout & Scaling Controls */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#1a1b20] p-0.5 rounded border border-zinc-700 text-xs">
-            <button
-              onClick={() => setLayoutMode('side-by-side')}
-              className={`px-2.5 py-1 rounded font-medium ${
-                layoutMode === 'side-by-side' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Yan Yana Düzen
-            </button>
-            <button
-              onClick={() => {
-                setLayoutMode('vertical-stack');
-                setPlaylistWidth(275);
-                setPlaylistHeight(140);
-              }}
-              className={`px-2.5 py-1 rounded font-medium ${
-                layoutMode === 'vertical-stack' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Klasik Dikey Düzen
-            </button>
-          </div>
-
-          {/* Scaling Toggle */}
-          <button
-            onClick={() => setIsDoubleSize(!isDoubleSize)}
-            className={`px-2 py-1 rounded border text-xs font-mono flex items-center gap-1 ${
-              isDoubleSize
-                ? 'bg-amber-950 text-amber-300 border-amber-600'
-                : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white'
-            }`}
-            title="Büyütme Modu (Ctrl+D)"
-          >
-            <span>{isDoubleSize ? '1.5X AKTİF' : '1X (275px)'}</span>
-          </button>
-
-          {/* Quick Play/Pause Button */}
-          <button
-            onClick={togglePlay}
-            className="px-2.5 py-1 rounded bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-xs flex items-center gap-1 shadow"
-          >
-            <span>{playback.isPlaying ? '■ Durdur' : '▶ Oynat'}</span>
-          </button>
-        </div>
-      </div>
-
       {audioError && (
-        <div className="w-full max-w-4xl mb-2 px-2 py-1 rounded border border-red-800 bg-red-950/60 text-red-300 text-[11px] font-mono">
+        <div className="fixed top-1 left-1/2 -translate-x-1/2 z-[60] max-w-[275px] px-2 py-1 border border-red-800 bg-red-950/90 text-red-300 text-[10px] font-mono">
           ⚠ {audioError}
         </div>
       )}
 
-      {/* Main Workspace Frame (Applies scaling if active) */}
+      {/* The player IS the app: main / EQ / playlist stacked with no chrome. */}
       <div
-        className="p-4 bg-[#141518] rounded-lg border border-[#26282f] overflow-auto shadow-2xl transition-transform origin-top"
+        id="playerStack"
+        className="flex flex-col items-start mx-auto transition-transform"
         style={{
           transform: isDoubleSize ? 'scale(1.5)' : 'scale(1)',
-          marginBottom: isDoubleSize ? '140px' : '0px',
+          transformOrigin: 'top center',
         }}
       >
-        {/* Layout Shell: 0px gap throughout */}
-        <div
-          className={`flex items-start ${layoutMode === 'side-by-side' ? 'flex-row' : 'flex-col'}`}
-          style={{ gap: 0 }}
-        >
-          {/* Left Column (Main Player + EQ) - Fixed 275px */}
-          <div className="flex flex-col items-start shrink-0 w-[275px]" style={{ gap: 0 }}>
-            {/* 1. Main Window (275x116px) */}
-            <MainWindow
-              playback={playback}
-              currentTrack={currentTrack}
-              onPlay={handlePlay}
-              onPause={handlePause}
-              onStop={handleStop}
-              onPrev={handlePrev}
-              onNext={handleNext}
-              onSeek={handleSeek}
-              onVolumeChange={handleVolumeChange}
-              onBalanceChange={handleBalanceChange}
-              onToggleShuffle={() => setPlayback((p) => ({ ...p, shuffle: !p.shuffle }))}
-              onToggleRepeat={() => setPlayback((p) => ({ ...p, repeat: !p.repeat }))}
-              isEQVisible={isEQVisible}
-              onToggleEQ={() => setIsEQVisible(!isEQVisible)}
-              isPLVisible={isPLVisible}
-              onTogglePL={() => setIsPLVisible(!isPLVisible)}
-              onOpenAbout={() => setIsAboutOpen(true)}
-              onOpenFile={() => hiddenFileInputRef.current?.click()}
-              isDoubleSize={isDoubleSize}
-              onToggleDoubleSize={() => setIsDoubleSize((prev) => !prev)}
-              onOpenTrackInfo={() => setIsTrackInfoOpen(true)}
-            />
+        <MainWindow
+          playback={playback}
+          currentTrack={currentTrack}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onStop={handleStop}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onBalanceChange={handleBalanceChange}
+          onToggleShuffle={() => setPlayback((p) => ({ ...p, shuffle: !p.shuffle }))}
+          onToggleRepeat={() => setPlayback((p) => ({ ...p, repeat: !p.repeat }))}
+          isEQVisible={isEQVisible}
+          onToggleEQ={() => setIsEQVisible(!isEQVisible)}
+          isPLVisible={isPLVisible}
+          onTogglePL={() => setIsPLVisible(!isPLVisible)}
+          onOpenAbout={() => setIsAboutOpen(true)}
+          onOpenFile={() => hiddenFileInputRef.current?.click()}
+          isDoubleSize={isDoubleSize}
+          onToggleDoubleSize={() => setIsDoubleSize((prev) => !prev)}
+          onOpenTrackInfo={() => setIsTrackInfoOpen(true)}
+        />
 
-            {/* 2. Equalizer Window (275x116px) - Sits directly below Main with 0px gap */}
-            {isEQVisible && <Equalizer onClose={() => setIsEQVisible(false)} />}
+        {isEQVisible && <Equalizer onClose={() => setIsEQVisible(false)} />}
 
-            {/* If in vertical stack mode, Playlist docks right below EQ */}
-            {layoutMode === 'vertical-stack' && isPLVisible && (
-              <Playlist
-                tracks={tracks}
-                currentTrackId={currentTrack?.id || null}
-                onSelectTrack={selectTrack}
-                onAddTracks={handleAddFiles}
-                onRequestAddUrl={() => setIsUrlModalOpen(true)}
-                onRemoveTrack={handleRemoveTrack}
-                onClose={() => setIsPLVisible(false)}
-                width={playlistWidth}
-                height={playlistHeight}
-                onResize={(w, h) => {
-                  setPlaylistWidth(w);
-                  setPlaylistHeight(h);
-                }}
-              />
-            )}
-          </div>
-
-          {/* If in side-by-side mode, Playlist docks immediately to the right */}
-          {layoutMode === 'side-by-side' && isPLVisible && (
-            <Playlist
-              tracks={tracks}
-              currentTrackId={currentTrack?.id || null}
-              onSelectTrack={selectTrack}
-              onAddTracks={handleAddFiles}
-              onRequestAddUrl={() => setIsUrlModalOpen(true)}
-              onRemoveTrack={handleRemoveTrack}
-              onClose={() => setIsPLVisible(false)}
-              width={playlistWidth}
-              height={playlistHeight}
-              onResize={(w, h) => {
-                setPlaylistWidth(w);
-                setPlaylistHeight(h);
-              }}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Footer Info & Shortcuts */}
-      <div className="w-full max-w-4xl mt-3 pt-2 border-t border-[#1e2025] flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-        <div>
-          <span>Kısayollar: </span>
-          <span className="text-zinc-400 font-bold">Space</span> (Oynat/Duraklat) •{' '}
-          <span className="text-zinc-400 font-bold">V</span> (Durdur) •{' '}
-          <span className="text-zinc-400 font-bold">Z / B</span> (Önceki/Sonraki) •{' '}
-          <span className="text-zinc-400 font-bold">C</span> (Duraklat) •{' '}
-          <span className="text-zinc-400 font-bold">Alt+G / Alt+W</span> (EQ/PL) •{' '}
-          <span className="text-zinc-400 font-bold">Ctrl+D</span> (1.5x Boyut)
-        </div>
-        <div>
-          <span>WinAMP 2.9x Classic Base Skin Replica</span>
-        </div>
+        {isPLVisible && (
+          <Playlist
+            tracks={tracks}
+            currentTrackId={currentTrack?.id || null}
+            onSelectTrack={selectTrack}
+            onAddTracks={handleAddFiles}
+            onRequestAddUrl={() => setIsUrlModalOpen(true)}
+            onRemoveTrack={handleRemoveTrack}
+            onClose={() => setIsPLVisible(false)}
+            width={playlistWidth}
+            height={playlistHeight}
+            onResize={(w, h) => {
+              setPlaylistWidth(w);
+              setPlaylistHeight(h);
+            }}
+          />
+        )}
       </div>
 
       {/* Modals */}

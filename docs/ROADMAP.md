@@ -9,7 +9,9 @@ Bu belge, mevcut sürümde **gerçekten çalışan** özellikler ile planlanan i
 | Özellik | Durum |
 | --- | --- |
 | Winamp 2.9x görsel dili (275×116 Main/EQ, resize Playlist) | Tamamlandı |
-| Windowshade (başlığa çift tık / ▢) | Tamamlandı |
+| Kenarlıksız, yalnızca oyuncudan oluşan arayüz (frameless Electron) | Tamamlandı |
+| Tema uyumlu playlist kaydırma çubuğu | Tamamlandı |
+| Windowshade (▢; tarayıcıda başlığa çift tık) | Tamamlandı |
 | 1.5x görsel büyütme (`Ctrl+D`) | Tamamlandı |
 | "It really whips the llama's ass!" hakkında penceresi ve synth sesi | Tamamlandı |
 | Gerçek yerel dosya oynatma + sürükle-bırak | Tamamlandı |

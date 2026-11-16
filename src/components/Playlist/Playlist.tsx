@@ -34,6 +34,30 @@ export const Playlist: React.FC<PlaylistProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isShaded, setIsShaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [scrollState, setScrollState] = useState({ top: 0, height: 0, viewport: 0 });
+
+  const syncScrollState = () => {
+    const el = listRef.current;
+    if (!el) return;
+    setScrollState((prev) =>
+      prev.top === el.scrollTop && prev.height === el.scrollHeight && prev.viewport === el.clientHeight
+        ? prev
+        : { top: el.scrollTop, height: el.scrollHeight, viewport: el.clientHeight }
+    );
+  };
+
+  useEffect(() => {
+    syncScrollState();
+  }, [tracks.length, isShaded, height]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => syncScrollState());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Drop the selection when the selected track is removed.
   useEffect(() => {
@@ -64,6 +88,58 @@ export const Playlist: React.FC<PlaylistProps> = ({
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   };
+
+  // Custom Winamp-style scrollbar: the native one is hidden because Chromium
+  // falls back to overlay scrollbars on some systems and would ignore theming.
+  const getScrollbarMetrics = () => {
+    const el = listRef.current;
+    if (!el) return null;
+    const trackHeight = el.clientHeight;
+    const maxScroll = el.scrollHeight - trackHeight;
+    if (trackHeight <= 0 || maxScroll <= 0) return null;
+    const thumbHeight = Math.max(18, (trackHeight * trackHeight) / el.scrollHeight);
+    return { el, trackHeight, maxScroll, thumbHeight };
+  };
+
+  const handleScrollbarThumbMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const metrics = getScrollbarMetrics();
+    if (!metrics) return;
+    const { el, trackHeight, maxScroll, thumbHeight } = metrics;
+    const startY = e.clientY;
+    const startTop = el.scrollTop;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientY - startY;
+      el.scrollTop = startTop + (delta / Math.max(1, trackHeight - thumbHeight)) * maxScroll;
+    };
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleScrollbarTrackMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    const metrics = getScrollbarMetrics();
+    if (!metrics) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientY - rect.top) / Math.max(1, rect.height);
+    metrics.el.scrollTop = ratio * metrics.maxScroll;
+  };
+
+  const showScrollbar = scrollState.viewport > 0 && scrollState.height > scrollState.viewport + 1;
+  const scrollbarThumbHeight = showScrollbar
+    ? Math.max(18, (scrollState.viewport * scrollState.viewport) / scrollState.height)
+    : 0;
+  const scrollbarThumbTop = showScrollbar
+    ? (scrollState.top / Math.max(1, scrollState.height - scrollState.viewport)) *
+      Math.max(0, scrollState.viewport - scrollbarThumbHeight)
+    : 0;
 
   // Drag & drop files onto playlist
   const handleDragOver = (e: React.DragEvent) => {
@@ -142,38 +218,59 @@ export const Playlist: React.FC<PlaylistProps> = ({
       {!isShaded && (
         <>
           {/* Playlist Track List Box */}
-          <div className="wa-lcd-box m-1 p-1 flex-1 overflow-y-auto font-mono text-[9px] leading-tight select-none">
-            {tracks.length === 0 ? (
-              <div className="text-zinc-600 italic p-2 text-center">
-                Müzik dosyalarını buraya sürükleyin veya alttaki + ADD butonuna tıklayın.
-              </div>
-            ) : (
-              tracks.map((track, idx) => {
-                const isCurrent = track.id === currentTrackId;
-                const isSel = track.id === selectedId;
+          <div className="wa-lcd-box m-1 flex-1 relative overflow-hidden">
+            <div
+              ref={listRef}
+              onScroll={syncScrollState}
+              className="wa-playlist-list h-full overflow-y-auto p-1 pr-3.5 font-mono text-[9px] leading-tight select-none"
+            >
+              {tracks.length === 0 ? (
+                <div className="text-zinc-600 italic p-2 text-center">
+                  Müzik dosyalarını buraya sürükleyin veya alttaki + ADD butonuna tıklayın.
+                </div>
+              ) : (
+                tracks.map((track, idx) => {
+                  const isCurrent = track.id === currentTrackId;
+                  const isSel = track.id === selectedId;
 
-                return (
-                  <div
-                    key={track.id}
-                    onClick={() => setSelectedId(track.id)}
-                    onDoubleClick={() => onSelectTrack(track)}
-                    className={`flex justify-between items-center px-1 py-0.5 cursor-pointer ${
-                      isCurrent
-                        ? 'text-[#00FF44] bg-[#002806] border-l-2 border-[#00FF44] font-bold'
-                        : isSel
-                        ? 'bg-[#151624] text-yellow-300'
-                        : 'text-amber-300 hover:bg-[#13141c]'
-                    }`}
-                  >
-                    <span className="truncate">
-                      {idx + 1}. {track.artist ? `${track.artist} - ` : ''}{track.title}
-                    </span>
-                    <span className="ml-2 font-mono shrink-0">
-                      {formatTrackTime(track.duration, !!track.url && !track.file)}
-                    </span>
-                  </div>
-                );
-              })
+                  return (
+                    <div
+                      key={track.id}
+                      onClick={() => setSelectedId(track.id)}
+                      onDoubleClick={() => onSelectTrack(track)}
+                      className={`flex justify-between items-center px-1 py-0.5 cursor-pointer ${
+                        isCurrent
+                          ? 'text-[#00FF44] bg-[#002806] border-l-2 border-[#00FF44] font-bold'
+                          : isSel
+                          ? 'bg-[#151624] text-yellow-300'
+                          : 'text-amber-300 hover:bg-[#13141c]'
+                      }`}
+                    >
+                      <span className="truncate">
+                        {idx + 1}. {track.artist ? `${track.artist} - ` : ''}{track.title}
+                      </span>
+                      <span className="ml-2 font-mono shrink-0">
+                        {formatTrackTime(track.duration, !!track.url && !track.file)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Themed scrollbar: native overlay scrollbars cannot be styled reliably. */}
+            {showScrollbar && (
+              <div
+                className="wa-scrollbar"
+                onMouseDown={handleScrollbarTrackMouseDown}
+                title="Kaydır"
+              >
+                <div
+                  className="wa-scrollbar-thumb"
+                  style={{ top: scrollbarThumbTop, height: scrollbarThumbHeight }}
+                  onMouseDown={handleScrollbarThumbMouseDown}
+                />
+              </div>
             )}
           </div>
 

@@ -21,8 +21,6 @@ export interface WindowState {
   shadeMode: boolean; // Windowshade 14px mini bar mode
 }
 
-export type LayoutMode = 'side-by-side' | 'vertical-stack';
-
 export interface PlaybackState {
   isPlaying: boolean;
   isPaused: boolean;

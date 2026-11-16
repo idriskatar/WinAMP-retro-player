@@ -42,11 +42,14 @@ function showWindow() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 610,
-    height: 380,
-    minWidth: 290,
+    // The three Winamp windows are the entire UI, so the OS frame is removed.
+    // Title bars use -webkit-app-region: drag to move the window.
+    frame: false,
+    width: 275,
+    height: 464,
+    minWidth: 275,
     minHeight: 160,
-    backgroundColor: '#111215',
+    backgroundColor: '#0d0e10',
     title: 'WinAMP 2.9x Retro Player',
     icon: getIconPath(),
     webPreferences: {
