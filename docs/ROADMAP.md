@@ -10,6 +10,8 @@ Bu belge, mevcut sürümde **gerçekten çalışan** özellikler ile planlanan i
 | --- | --- |
 | Winamp 2.9x görsel dili (275×116 Main/EQ, resize Playlist) | Tamamlandı |
 | Kenarlıksız, yalnızca oyuncudan oluşan arayüz (frameless Electron) | Tamamlandı |
+| Panellere tam oturan pencere (boşluksuz yerleşim, `window:fit`) | Tamamlandı |
+| Ayrı playlist penceresi (↗ / ↙) ve iki pencere arası durum senkronu | Tamamlandı |
 | Tema uyumlu playlist kaydırma çubuğu | Tamamlandı |
 | Windowshade (▢; tarayıcıda başlığa çift tık) | Tamamlandı |
 | 1.5x görsel büyütme (`Ctrl+D`) | Tamamlandı |
@@ -28,7 +30,7 @@ Bu belge, mevcut sürümde **gerçekten çalışan** özellikler ile planlanan i
 
 ## 🎯 v1.1.0 — Masaüstü deneyimini derinleştirme
 
-- **Gerçek çoklu pencere ve manyetik kenetlenme**: Main, EQ ve Playlist'in ayrı `BrowserWindow`'ları olması; 12 px yaklaşınca kenetlenme, ana pencereyle grup sürükleme.
+- **Main ve EQ için de ayrı pencere**: bugün yalnızca playlist ayrılabiliyor; üç panelin bağımsız `BrowserWindow`'ları ve 12 px yaklaşınca kenetlenme / grup sürükleme.
 - **ID3 / Vorbis metadata**: sanatçı, albüm, yıl, tür ve kapak görseli; `Alt+3` bilgi penceresi.
 - **Çalma listesi kalıcılığı**: uygulama kapanıp açıldığında playlist ve son konumun korunması; `.m3u` içe/dışa aktarma.
 - **Shoutcast / radio directory**: hazır istasyon listesi ve `.pls` / `.m3u` akış desteği.

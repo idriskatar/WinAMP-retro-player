@@ -17,6 +17,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Detached playlist window: the panels are the whole window. */
+body.wa-detached {
+  overflow: hidden;
+}
+
 /* Winamp Klasik 3D Kabartmalı Çerçeve */
 .wa-window {
   position: relative;

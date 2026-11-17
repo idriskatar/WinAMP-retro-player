@@ -5,8 +5,9 @@ import { Playlist } from './components/Playlist/Playlist';
 import { AboutModal } from './components/AboutModal/AboutModal';
 import { AddUrlModal } from './components/AddUrlModal/AddUrlModal';
 import { TrackInfoModal } from './components/TrackInfoModal/TrackInfoModal';
-import { Track, PlaybackState } from './types/winamp';
+import { Track, PlaybackState, PlaylistAction, PlaylistSyncState } from './types/winamp';
 import { audio } from './audio/AudioEngine';
+import { useFitElectronWindow } from './hooks/useFitElectronWindow';
 
 const INITIAL_TRACKS: Track[] = [
   { id: '1', title: 'Whippin The Badass Retro Beat (Winamp 2.9x Classic)', artist: 'DJ Mike Llama', duration: 252 },
@@ -57,12 +58,16 @@ export const App: React.FC = () => {
   // Window visibilities
   const [isEQVisible, setIsEQVisible] = useState(true);
   const [isPLVisible, setIsPLVisible] = useState(true);
+  const [isPLDetached, setIsPLDetached] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
   // 1.5x scaling mode (Ctrl+D)
   const [isDoubleSize, setIsDoubleSize] = useState(false);
+
+  const stackRef = useRef<HTMLDivElement | null>(null);
+  useFitElectronWindow(stackRef, [isDoubleSize]);
 
   // Playlist dynamic dimensions
   const [playlistWidth, setPlaylistWidth] = useState(275);
@@ -464,6 +469,111 @@ export const App: React.FC = () => {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe?.());
   }, []);
 
+  // Keep the detached playlist window in sync with tracks/current track and
+  // route its commands back to the real handlers in this window.
+  const playlistActionsRef = useRef({
+    select: (_trackId: string) => {},
+    remove: (_trackId: string) => {},
+    addFiles: (_files: File[]) => {},
+    addUrl: () => {},
+  });
+  playlistActionsRef.current = {
+    select: (trackId) => {
+      const track = tracksRef.current.find((item) => item.id === trackId);
+      if (track) selectTrack(track);
+    },
+    remove: handleRemoveTrack,
+    addFiles: handleAddFiles,
+    addUrl: () => setIsUrlModalOpen(true),
+  };
+
+  const buildPlaylistState = (): PlaylistSyncState => ({
+    tracks: tracksRef.current.map((track) => ({
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      url: track.url,
+      isFile: Boolean(track.file),
+    })),
+    currentTrackId: currentTrackRef.current?.id ?? null,
+  });
+
+  useEffect(() => {
+    window.electronAPI?.notifyPlaylistState(buildPlaylistState());
+  }, [tracks, currentTrack, isPLDetached]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    const unsubscribeAction = api.onPlaylistAction((action: PlaylistAction) => {
+      const handlers = playlistActionsRef.current;
+      switch (action.type) {
+        case 'select-track':
+          handlers.select(action.trackId);
+          break;
+        case 'remove-track':
+          handlers.remove(action.trackId);
+          break;
+        case 'add-files': {
+          const files = action.files.map(
+            (file) => new File([file.data], file.name, { type: file.mime })
+          );
+          handlers.addFiles(files);
+          break;
+        }
+        case 'add-url':
+          handlers.addUrl();
+          break;
+        case 'toggle-play':
+          actionsRef.current.togglePlay();
+          break;
+        case 'stop':
+          actionsRef.current.stop();
+          break;
+        case 'prev':
+          actionsRef.current.prev();
+          break;
+        case 'next':
+          actionsRef.current.next();
+          break;
+        case 'pause':
+          actionsRef.current.pause();
+          break;
+      }
+    });
+
+    const unsubscribeClosed = api.onPlaylistWindowClosed((reason) => {
+      setIsPLDetached(false);
+      setIsPLVisible(reason === 'attach');
+      if (reason === 'attach') setPlaylistWidth(275);
+    });
+
+    const unsubscribeRequest = api.onPlaylistRequestState(() => {
+      api.notifyPlaylistState(buildPlaylistState());
+    });
+
+    return () => {
+      unsubscribeAction();
+      unsubscribeClosed();
+      unsubscribeRequest();
+    };
+  }, []);
+
+  // While detached, the playlist toggle shows/hides the separate window.
+  useEffect(() => {
+    if (!isPLDetached) return;
+    window.electronAPI?.setPlaylistWindowVisible(isPLVisible);
+  }, [isPLDetached, isPLVisible]);
+
+  const handleDetachPlaylist = () => {
+    if (!window.electronAPI?.detachPlaylist) return;
+    setIsPLVisible(true);
+    setIsPLDetached(true);
+    window.electronAPI.detachPlaylist();
+  };
+
   useEffect(() => {
     if (!audioError) return;
     const timer = window.setTimeout(() => setAudioError(null), 6000);
@@ -472,7 +582,9 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen w-full bg-[#0d0e10] flex items-start select-none font-sans text-xs overflow-auto"
+      className={`min-h-screen w-full bg-[#0d0e10] flex items-start select-none font-sans text-xs ${
+        window.electronAPI ? 'overflow-hidden' : 'overflow-auto'
+      }`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -501,7 +613,8 @@ export const App: React.FC = () => {
       {/* The player IS the app: main / EQ / playlist stacked with no chrome. */}
       <div
         id="playerStack"
-        className="flex flex-col items-start mx-auto transition-transform"
+        ref={stackRef}
+        className="flex flex-col items-start mx-auto"
         style={{
           transform: isDoubleSize ? 'scale(1.5)' : 'scale(1)',
           transformOrigin: 'top center',
@@ -533,7 +646,7 @@ export const App: React.FC = () => {
 
         {isEQVisible && <Equalizer onClose={() => setIsEQVisible(false)} />}
 
-        {isPLVisible && (
+        {isPLVisible && !isPLDetached && (
           <Playlist
             tracks={tracks}
             currentTrackId={currentTrack?.id || null}
@@ -542,6 +655,8 @@ export const App: React.FC = () => {
             onRequestAddUrl={() => setIsUrlModalOpen(true)}
             onRemoveTrack={handleRemoveTrack}
             onClose={() => setIsPLVisible(false)}
+            onDetach={window.electronAPI ? handleDetachPlaylist : undefined}
+            maxWidth={275}
             width={playlistWidth}
             height={playlistHeight}
             onResize={(w, h) => {

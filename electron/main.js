@@ -2,6 +2,7 @@ const {
   app,
   BrowserWindow,
   globalShortcut,
+  screen,
   Tray,
   Menu,
   nativeImage,
@@ -10,6 +11,10 @@ const {
 const path = require('path');
 
 let mainWindow = null;
+let playlistWindow = null;
+let lastPlaylistState = null;
+let playlistVisible = false;
+let playlistCloseReason = 'hide';
 let tray = null;
 let trayAvailable = false;
 let isQuitting = false;
@@ -38,6 +43,26 @@ function showWindow() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  if (playlistWindow && !playlistWindow.isDestroyed() && playlistVisible) {
+    playlistWindow.show();
+  }
+}
+
+/** Loads the React bundle, optionally into the detached playlist entry point. */
+function loadRenderer(win, panel) {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    const url = new URL(process.env.VITE_DEV_SERVER_URL);
+    if (panel) url.searchParams.set('panel', panel);
+    win.loadURL(url.toString());
+    return;
+  }
+
+  const file = path.join(__dirname, '../dist/index.html');
+  if (panel) {
+    win.loadFile(file, { query: { panel } });
+  } else {
+    win.loadFile(file);
+  }
 }
 
 function createWindow() {
@@ -48,7 +73,11 @@ function createWindow() {
     width: 275,
     height: 464,
     minWidth: 275,
-    minHeight: 160,
+    minHeight: 14,
+    // The renderer locks min/max to the exact panel size, so the window always
+    // hugs the Winamp windows instead of showing empty background.
+    maximizable: false,
+    fullscreenable: false,
     backgroundColor: '#0d0e10',
     title: 'WinAMP 2.9x Retro Player',
     icon: getIconPath(),
@@ -60,12 +89,7 @@ function createWindow() {
     autoHideMenuBar: true,
   });
 
-  // If a dev server URL is explicitly provided, load it; otherwise load built dist/index.html
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  loadRenderer(mainWindow, null);
 
   // DevTools only in development builds.
   if (!app.isPackaged) {
@@ -80,6 +104,11 @@ function createWindow() {
   // External windows are not part of this app.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // The detached playlist lives beside the main window, so hide it with it.
+  mainWindow.on('hide', () => {
+    if (playlistWindow && !playlistWindow.isDestroyed()) playlistWindow.hide();
+  });
+
   // Closing the window hides it to the tray (the tray "Çıkış" item quits).
   mainWindow.on('close', (event) => {
     if (!isQuitting && trayAvailable) {
@@ -89,7 +118,93 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    if (playlistWindow && !playlistWindow.isDestroyed()) playlistWindow.destroy();
+    playlistWindow = null;
     mainWindow = null;
+  });
+}
+
+/** Resizes a window so the Winamp panels fill it completely (no dead space). */
+function applyContentSize(win, width, height) {
+  if (!win || win.isDestroyed()) return;
+  const w = Math.max(200, Math.round(Number(width) || 0));
+  const h = Math.max(14, Math.round(Number(height) || 0));
+
+  // No early return on getContentSize() here: that value can lag one resize
+  // behind, which would silently drop the "grow back" request after the user
+  // leaves 1.5x mode or re-opens a shaded panel.
+  //
+  // Windows refuses to grow a window whose maximum size is already locked to a
+  // smaller value, so release the cap before resizing, then lock to the exact
+  // panel size. min == max means the user cannot drag the window into a size
+  // that would leave empty background around the Winamp panels.
+  win.setMaximumSize(10000, 10000);
+  win.setMinimumSize(w, h);
+  win.setContentSize(w, h);
+  win.setMaximumSize(w, h);
+}
+
+/** Opens the playlist as its own frameless, independently placed window. */
+function createPlaylistWindow() {
+  if (playlistWindow && !playlistWindow.isDestroyed()) {
+    playlistWindow.show();
+    playlistWindow.focus();
+    return;
+  }
+
+  const width = 275;
+  const height = 232;
+  const mainBounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+  let x = mainBounds ? mainBounds.x + mainBounds.width + 6 : 200;
+  let y = mainBounds ? mainBounds.y : 200;
+
+  // Keep the detached playlist on the same display as the main window.
+  const display = screen.getDisplayNearestPoint({ x, y });
+  const area = display.workArea;
+  x = Math.min(Math.max(x, area.x), area.x + area.width - width);
+  y = Math.min(Math.max(y, area.y), area.y + area.height - height);
+
+  playlistCloseReason = 'hide';
+  playlistVisible = true;
+
+  playlistWindow = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    frame: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    backgroundColor: '#0d0e10',
+    title: 'WinAMP Playlist',
+    icon: getIconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+    autoHideMenuBar: true,
+  });
+
+  loadRenderer(playlistWindow, 'playlist');
+  playlistWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  playlistWindow.webContents.on('did-finish-load', () => {
+    if (lastPlaylistState) {
+      playlistWindow?.webContents.send('playlist:state', lastPlaylistState);
+    }
+  });
+
+  playlistWindow.on('closed', () => {
+    playlistWindow = null;
+    playlistVisible = false;
+    const reason = playlistCloseReason;
+    playlistCloseReason = 'hide';
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('playlist:window-closed', reason);
+    }
   });
 }
 
@@ -169,6 +284,69 @@ ipcMain.on('window:close', () => {
 ipcMain.on('window:always-on-top', (_event, enabled) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.setAlwaysOnTop(Boolean(enabled));
+  if (playlistWindow && !playlistWindow.isDestroyed()) {
+    playlistWindow.setAlwaysOnTop(Boolean(enabled));
+  }
+});
+
+ipcMain.on('window:fit', (event, size) => {
+  if (!size) return;
+  applyContentSize(BrowserWindow.fromWebContents(event.sender), size.width, size.height);
+});
+
+ipcMain.on('playlist:detach', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  createPlaylistWindow();
+});
+
+ipcMain.on('playlist:attach', () => {
+  if (!playlistWindow || playlistWindow.isDestroyed()) return;
+  playlistCloseReason = 'attach';
+  playlistWindow.close();
+});
+
+ipcMain.on('playlist:close', () => {
+  if (!playlistWindow || playlistWindow.isDestroyed()) return;
+  playlistCloseReason = 'hide';
+  playlistWindow.close();
+});
+
+ipcMain.on('playlist:visibility', (_event, visible) => {
+  playlistVisible = Boolean(visible);
+  if (!playlistWindow || playlistWindow.isDestroyed()) return;
+  if (playlistVisible) {
+    playlistWindow.show();
+  } else {
+    playlistWindow.hide();
+  }
+});
+
+// State and commands flow through the main process so the two renderer
+// processes never need to know about each other.
+ipcMain.on('playlist:state', (_event, state) => {
+  lastPlaylistState = state;
+  if (playlistWindow && !playlistWindow.isDestroyed()) {
+    playlistWindow.webContents.send('playlist:state', state);
+  }
+});
+
+ipcMain.on('playlist:request-state', () => {
+  if (lastPlaylistState && playlistWindow && !playlistWindow.isDestroyed()) {
+    playlistWindow.webContents.send('playlist:state', lastPlaylistState);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('playlist:request-state');
+  }
+});
+
+ipcMain.on('playlist:action', (_event, action) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  // The URL dialog lives in the main window, so bring it forward first.
+  if (action && action.type === 'add-url') {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  mainWindow.webContents.send('playlist:action', action);
 });
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();

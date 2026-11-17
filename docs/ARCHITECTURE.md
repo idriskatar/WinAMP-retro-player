@@ -31,9 +31,10 @@ graph TD
 
     subgraph Electron Main
         Win[BrowserWindow 275x464 frameless]
+        PLWin[Playlist BrowserWindow + IPC relay]
         Tray[Tray + Menu]
         Keys[globalShortcut media keys]
-        IPC[ipcMain window controls]
+        IPC[ipcMain window controls + window:fit]
     end
 
     App --> MW
@@ -48,9 +49,13 @@ graph TD
     Tray -- IPC media-* --> App
     Keys -- IPC media-* --> App
     IPC -- window:minimize/close --> Win
+    App -- playlist:state --> PLWin
+    PLWin -- playlist:action --> App
 ```
 
-Tek bir Electron penceresi vardır. Main, EQ ve Playlist "pencereleri" aynı React ağacında CSS ile çizilen panellerdir; ekstra başlık, araç çubuğu veya panel olmadan 275 px genişlikte dikey olarak 0 px boşlukla yığılırlar. Electron penceresi kenarlıksızdır (`frame: false`); ayrı OS pencereleri, sürükleme/kenetlenme motoru yoktur. Pencereyi taşımak için başlık çubukları `-webkit-app-region: drag` kullanır.
+Varsayılan olarak tek bir Electron penceresi vardır. Main, EQ ve Playlist "pencereleri" aynı React ağacında CSS ile çizilen panellerdir; ekstra başlık, araç çubuğu veya panel olmadan 275 px genişlikte dikey olarak 0 px boşlukla yığılırlar. Electron penceresi kenarlıksızdır (`frame: false`) ve `window:fit` ile panellerin toplam ölçüsüne kilitlenir, böylece panellerin altında/sağında boş arka plan kalmaz. Pencereyi taşımak için başlık çubukları `-webkit-app-region: drag` kullanır.
+
+Playlist istenirse `↗` düğmesiyle ayrı bir kenarlıksız OS penceresine alınır ve serbestçe konumlandırılır; o durumda ana pencere yalnızca Main + EQ yüksekliğine küçülür. `↙` ile playlist ana pencereye geri yapışır. Manyetik kenetlenme / grup sürükleme motoru yoktur.
 
 ---
 
@@ -127,14 +132,24 @@ Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDem
 
 ### `electron/main.js`
 - **Tek örnek**: `app.requestSingleInstanceLock()`; ikinci örnek mevcut pencereyi öne getirir.
-- **Pencere**: kenarlıksız (`frame: false`), 275×464 (Main 116 + EQ 116 + Playlist 232), min 275×160, `backgroundColor: '#0d0e10'`, `contextIsolation: true`, `nodeIntegration: false`, `webSecurity` varsayılan (açık). Başlık çubukları `-webkit-app-region: drag` ile pencereyi taşır; `.wa-tbtn` ve tıklanabilir başlık içerikleri `no-drag`.
-- **Geliştirme/production**: `VITE_DEV_SERVER_URL` varsa Vite sunucusu, yoksa `dist/index.html` yüklenir.
+- **Pencere**: kenarlıksız (`frame: false`), 275×464 (Main 116 + EQ 116 + Playlist 232), `backgroundColor: '#0d0e10'`, `contextIsolation: true`, `nodeIntegration: false`, `webSecurity` varsayılan (açık). Başlık çubukları `-webkit-app-region: drag` ile pencereyi taşır; `.wa-tbtn` ve tıklanabilir başlık içerikleri `no-drag`.
+- **Boşluksuz pencere (`window:fit`)**: renderer panellerin ölçüsünü `fitWindow(w, h)` ile bildirir; `applyContentSize` önce `setMaximumSize(10000, 10000)` ile sınırı açar (aksi halde küçülmüş pencere tekrar büyüyemez), sonra `setMinimumSize` + `setContentSize`, en son `setMaximumSize` ile min = max kilidi uygular. Böylece pencere her zaman panelleri tam sarar, kullanıcı elle boyutlandırıp boş arka plan oluşturamaz.
+- **Ayrı playlist penceresi**: `playlist:detach` ikinci bir kenarlıksız `BrowserWindow` açar (`?panel=playlist`), ana pencerenin sağına yerleştirir, ekran çalışma alanına sıkıştırır. `playlist:attach` pencereyi kapatır; `playlist:close` da kapatır ama renderer'a "hide" nedeni bildirir. `playlist:visibility` PL düğmesiyle ayrı pencereyi gizler/gösterir.
+- **State aktarımı**: ana pencere `playlist:state` gönderir, main process son durumu saklar ve ayrı pencereye iletir (`did-finish-load` sonrası da tekrar gönderir). Ayrı pencereden gelen `playlist:action` komutları (`select-track`, `remove-track`, `add-files`, `add-url`, oynatma komutları) ana pencereye yönlendirilir; dosyalar `ArrayBuffer` olarak taşınır çünkü `File` nesneleri IPC sınırını geçemez.
+- **Geliştirme/production**: `VITE_DEV_SERVER_URL` varsa Vite sunucusu (`?panel=` sorgusuyla), yoksa `dist/index.html` (`loadFile` + `query`) yüklenir.
 - **Tepsi**: ikon, oynat/durdur/sonraki/önceki, göster ve çıkış. Tepsi oluşturulamazsa uygulama pencere kapanınca normal şekilde çıkar.
-- **Kapatma davranışı**: tepsi varsa pencere gizlenir (`close` engellenir); tam çıkış tepsi menüsünden veya `before-quit` ile olur.
+- **Kapatma davranışı**: tepsi varsa pencere gizlenir (`close` engellenir); ayrı playlist de gizlenir. Tam çıkış tepsi menüsünden veya `before-quit` ile olur.
 - **Global kısayollar**: `MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop` bir kez kaydedilir, `will-quit`'te temizlenir.
-- **IPC**: `window:minimize`, `window:close`, `window:always-on-top` (renderer'daki sahte başlık çubuğu ve clutterbar düğmeleri).
+- **IPC**: `window:minimize`, `window:close`, `window:always-on-top` (renderer'daki sahte başlık çubuğu ve clutterbar düğmeleri) + `window:fit` ve `playlist:*` kanalları.
 - **İkon yolu**: geliştirmede `build/`, paketlenmiş uygulamada `process.resourcesPath` (electron-builder `extraResources` ile kopyalanır).
 - DevTools yalnızca paketlenmemiş geliştirme derlemesinde açılabilir.
+
+### Pencereyi panellere oturtan hook
+`src/hooks/useFitElectronWindow.ts` hedef panelin ölçüsünü izler ve `fitWindow` çağırır. Üç ayrıntı kritiktir:
+
+- `ResizeObserver` tek başına yetmez; pencere katlanınca (windowshade) yalnızca inline `style` değişir, bu yüzden `MutationObserver` (`style`/`class`, subtree) birincil tetikleyicidir.
+- Zamanlama `queueMicrotask` ile yapılır. `requestAnimationFrame`, `ResizeObserver` teslimi ve `setTimeout` Chromium tarafından örtülmüş/arka plan pencerelerde duraklatılır veya kısılır; bu yüzden ayrı playlist odaktayken ana pencere eski boyutta kalabilirdi.
+- Panel yığınında CSS geçişi (transition) kullanılmaz; animasyon sırasında `getBoundingClientRect` ara değer döndürüp pencereyi yanlış boyuta oturtur. `transitionend` yine de dinlenir.
 
 ### `electron/preload.js`
 `contextBridge` ile yalnızca şunları açar:
@@ -143,10 +158,15 @@ Paketteki 6 parça gerçek medya içermez. Bu parçalar seçildiğinde `startDem
 | --- | --- |
 | `onMediaPlayPause/Next/Prev/Stop(cb)` | Abonelik; her biri bir `unsubscribe` fonksiyonu döndürür |
 | `minimizeWindow()` / `closeWindow()` | Pencere kontrolleri |
-| `setAlwaysOnTop(enabled)` | Clutterbar **A** düğmesi; pencereyi her zaman üstte tutar |
+| `setAlwaysOnTop(enabled)` | Clutterbar **A** düğmesi; pencereyi (ve ayrı playlist'i) her zaman üstte tutar |
+| `fitWindow(width, height)` | Pencereyi panellerin tam ölçüsüne oturtur |
+| `notifyPlaylistState/requestPlaylistState/onPlaylistState` | Playlist durumunun ana pencere → ayrı pencere aktarımı |
+| `sendPlaylistAction/onPlaylistAction` | Ayrı pencereden gelen seçim, silme, dosya ekleme ve oynatma komutları |
+| `detachPlaylist/attachPlaylist/closePlaylistWindow/setPlaylistWindowVisible` | Ayrı playlist penceresini aç, ana pencereye yapıştır, kapat, gizle |
+| `onPlaylistWindowClosed(reason)` | `attach` veya `hide` nedenini ana pencereye bildirir |
 | `isElectron` | Ortam ayırt etmek için |
 
-Renderer tarafındaki dinleyiciler `src/App.tsx` içinde bir kez kurulur ve unmount'ta temizlenir.
+Renderer tarafındaki dinleyiciler `src/App.tsx` içinde bir kez kurulur ve unmount'ta temizlenir. Ayrı playlist giriş noktası `src/components/Playlist/DetachedPlaylist.tsx`'tir; `src/main.tsx` `?panel=playlist` sorgusuna göre yönlendirir.
 
 ---
 

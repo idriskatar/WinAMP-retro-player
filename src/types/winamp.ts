@@ -7,6 +7,34 @@ export interface Track {
   file?: File;
 }
 
+/** Track metadata that can cross the IPC boundary (File objects cannot). */
+export interface PlaylistTrackInfo {
+  id: string;
+  title: string;
+  artist: string;
+  duration: number;
+  url?: string;
+  isFile: boolean;
+}
+
+/** State broadcast from the main window to the detached playlist window. */
+export interface PlaylistSyncState {
+  tracks: PlaylistTrackInfo[];
+  currentTrackId: string | null;
+}
+
+/** Commands sent from the detached playlist window back to the main window. */
+export type PlaylistAction =
+  | { type: 'select-track'; trackId: string }
+  | { type: 'remove-track'; trackId: string }
+  | { type: 'add-files'; files: Array<{ name: string; mime: string; data: ArrayBuffer }> }
+  | { type: 'add-url' }
+  | { type: 'toggle-play' }
+  | { type: 'stop' }
+  | { type: 'prev' }
+  | { type: 'next' }
+  | { type: 'pause' };
+
 export interface EQBand {
   frequency: number;
   gain: number; // -12 to +12 dB

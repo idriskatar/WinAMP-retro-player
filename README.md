@@ -12,6 +12,8 @@ React + TypeScript + Web Audio API + Electron ile geliştirilmiş, 90'ların efs
 - **Sabit boyutlu ana pencere ve ekolayzer**: her biri tam **275 × 116 px**.
 - **Boyutlandırılabilir playlist**: minimum 275 × 116 px, sağ alt köşeden sürüklenerek büyütülür.
 - **Sadece oyuncu arayüzü**: ana pencere, ekolayzer ve playlist 275 px genişlikte dikey olarak 0 px boşlukla yığılır; ekstra başlık, panel veya çerçeve yoktur. Masaüstünde pencere kenarlıksız (frameless) açılır.
+- **Panellere tam oturan pencere**: masaüstünde pencere yüksekliği/ genişliği panellerin toplam ölçüsüne kilitlenir (min = max). Panel katlanınca, EQ/PL kapatılınca veya 1.5x moda geçilince pencere anında küçülür/büyür; panellerin altında veya sağında boş arka plan kalmaz.
+- **Ayrılabilir playlist**: başlıktaki ↗ düğmesi playlist'i ayrı, serbestçe taşınabilen ve boyutlandırılabilen ikinci bir pencereye alır; o sırada ana pencere yalnızca Main + EQ'ya küçülür. ↙ ile playlist ana pencereye geri yapışır. Seçim, silme, dosya ekleme ve oynatma komutları iki pencere arasında senkron kalır.
 - **Windowshade**: başlık çubuğundaki ▢ düğmesi pencereyi 14 px'lik mini bara döndürür (tarayıcıda başlığa çift tıklama da çalışır).
 - **Temalı playlist kaydırma çubuğu**: Winamp'ın metal düğme görünümüyle uyumlu, sürüklenebilir ve track'e tıklayarak sayfa atlayan özel çubuk (native overlay scrollbar'lar temalandırılamadığı için gizlenir).
 - **1.5x büyütme** (`Ctrl+D`) — yüksek DPI ekranlarda okunabilirlik için görsel ölçekleme.
@@ -30,6 +32,8 @@ React + TypeScript + Web Audio API + Electron ile geliştirilmiş, 90'ların efs
 
 ### Masaüstü (Electron)
 - **Kenarlıksız (frameless) pencere**: işletim sistemi çerçevesi ve menü çubuğu yok; pencere yalnızca Winamp panellerinden oluşur. Başlık çubuklarından sürüklenir.
+- **Boşluksuz yerleşim**: pencere panellerin ölçüsüne kilitlenir; elle boyutlandırma boş arka plan üretmez.
+- **Ayrı playlist penceresi**: playlist yapışık değilken kendi penceresinde konumlandırılır ve durum iki pencere arasında IPC ile senkron tutulur.
 - **Sistem tepsisi**: göster/gizle, oynat/duraklat, durdur, sonraki/önceki, çıkış.
 - **Global medya tuşları**: Play/Pause, Next, Previous, Stop — uygulama arka plandayken de çalışır.
 - **Tek örnek kilidi**: ikinci kez açıldığında mevcut pencere öne gelir.
@@ -95,6 +99,8 @@ npm start
 | `Alt+G` | Ekolayzeri göster/gizle |
 | `Alt+W` | Playlist'i göster/gizle |
 | Başlıktaki ▢ | Windowshade |
+| Başlıktaki ↗ | Playlist'i ayrı pencereye al (Electron) |
+| Başlıktaki ↙ | Playlist'i ana pencereye yapıştır (ayrı pencerede) |
 | Başlık çubuğunu sürükle | Pencereyi taşı (Electron) |
 
 Ana penceredeki **clutterbar** düğmeleri: **O** seçenekler menüsü, **A** her zaman üstte (Electron), **I** parça bilgisi, **D** 1.5x boyut, **V** görselleştirici döngüsü.
@@ -115,8 +121,9 @@ WinAMP-retro-player/
 │  └─ preload.js                 # contextBridge API (medya tuşları, pencere kontrolleri)
 ├─ src/
 │  ├─ audio/AudioEngine.ts       # Web Audio grafiği + HTMLAudioElement yaşam döngüsü
-│  ├─ components/                # MainWindow, Equalizer, Playlist, AboutModal, AddUrlModal, TrackInfoModal
-│  ├─ types/                     # Track / PlaybackState / Window tipleri
+│  ├─ components/                # MainWindow, Equalizer, Playlist (DetachedPlaylist dahil), modaller
+│  ├─ hooks/useFitElectronWindow.ts  # Pencereyi panellerin ölçüsüne oturtur
+│  ├─ types/                     # Track / PlaybackState / playlist senkron tipleri
 │  ├─ App.tsx                    # Oynatma durumu, playlist ve yerleşim yönetimi
 │  └─ index.css                  # Winamp 2.9x görsel dili
 ├─ index.html
@@ -130,7 +137,7 @@ WinAMP-retro-player/
 
 ## 🧱 Mimari Özeti
 
-- **Renderer**: Tek React ağacı içinde üç "pencere" bileşeni; 275 px genişlikte dikey yığın olarak çizilir ve sayfa üzerinde başka arayüz yoktur. Electron tarafında pencere kenarlıksızdır. Bu sürümde ayrı OS pencereleri, manyetik kenetlenme veya grup sürükleme yoktur.
+- **Renderer**: Tek React ağacı içinde üç "pencere" bileşeni; 275 px genişlikte dikey yığın olarak çizilir ve sayfa üzerinde başka arayüz yoktur. Electron tarafında pencere kenarlıksızdır ve panellerin toplam ölçüsüne kilitlenir. Playlist istenirse ayrı bir OS penceresine alınabilir (`?panel=playlist`); manyetik kenetlenme veya grup sürükleme yoktur.
 - **Ses**: `HTMLAudioElement → MediaElementSource → Preamp → 10 × BiquadFilter → StereoPanner → MasterGain → Analyser → Destination`.
 - **Durum**: Oynatma durumu `App.tsx` içinde tutulur; motor olayları (`timeupdate`, `durationchange`, `ended`, `error`) callback'lerle React'e akar.
 - **Electron**: `preload.js` yalnızca dar bir API yüzeyi açar (`contextIsolation: true`, `nodeIntegration: false`); dosyalar renderer'da `blob:` URL olarak yüklenir, `webSecurity` kapatılmaz.
@@ -153,7 +160,7 @@ git push origin v1.0.0
 
 ## 📋 Bilinen Sınırlar
 
-- Winamp'ın çoklu pencere (Main / EQ / PL ayrı OS pencereleri) ve manyetik kenetlenme davranışı henüz uygulanmadı; hepsi tek pencere içinde, dikey yığın olarak çizilir.
+- Main ve EQ hâlâ tek pencerede birlikte durur; yalnızca playlist ayrı pencereye alınabilir. Manyetik kenetlenme ve grup sürükleme yoktur.
 - Kenarlıksız pencerede başlık çubuğu sürükleme alanı olduğu için çift tıklayla windowshade Electron'da çalışmaz; `▢` düğmesi kullanılır.
 - `m3u` / `pls` çalma listesi dosyaları ve ID3 etiket düzenleme yoktur.
 - Tarayıcı/Chromium codec desteği geçerlidir; her format her platformda çalmayabilir.

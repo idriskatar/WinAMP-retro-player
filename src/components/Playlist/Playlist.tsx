@@ -9,6 +9,9 @@ interface PlaylistProps {
   onRequestAddUrl: () => void;
   onRemoveTrack: (id: string) => void;
   onClose: () => void;
+  onDetach?: () => void;
+  onAttach?: () => void;
+  maxWidth?: number;
   width: number;
   height: number;
   onResize: (newWidth: number, newHeight: number) => void;
@@ -27,6 +30,9 @@ export const Playlist: React.FC<PlaylistProps> = ({
   onRequestAddUrl,
   onRemoveTrack,
   onClose,
+  onDetach,
+  onAttach,
+  maxWidth = MAX_WIDTH,
   width,
   height,
   onResize,
@@ -75,7 +81,7 @@ export const Playlist: React.FC<PlaylistProps> = ({
     const startH = height;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const nextW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + (moveEvent.clientX - startX)));
+      const nextW = Math.max(MIN_WIDTH, Math.min(maxWidth, startW + (moveEvent.clientX - startX)));
       const nextH = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, startH + (moveEvent.clientY - startY)));
       onResize(nextW, nextH);
     };
@@ -184,7 +190,7 @@ export const Playlist: React.FC<PlaylistProps> = ({
         height: isShaded ? 14 : height,
         minWidth: MIN_WIDTH,
         minHeight: isShaded ? 14 : MIN_HEIGHT,
-        maxWidth: isShaded ? undefined : MAX_WIDTH,
+        maxWidth: isShaded ? undefined : maxWidth,
         maxHeight: isShaded ? undefined : MAX_HEIGHT,
         margin: 0,
         padding: 0,
@@ -210,8 +216,42 @@ export const Playlist: React.FC<PlaylistProps> = ({
           <span className="text-[9px] font-bold text-white tracking-widest font-mono">WINAMP PLAYLIST</span>
         </div>
         <div className="flex items-center gap-0.5 z-10">
-          <div className="wa-tbtn" title="Windowshade" onClick={() => setIsShaded(!isShaded)}>▢</div>
-          <div className="wa-tbtn text-red-300" title="Close" onClick={onClose}>×</div>
+          {onAttach && (
+            <div
+              className="wa-tbtn text-[8px] leading-none"
+              title="Ana pencereye yapıştır"
+              onClick={onAttach}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
+              ↙
+            </div>
+          )}
+          {onDetach && (
+            <div
+              className="wa-tbtn text-[8px] leading-none"
+              title="Ayrı pencereye al"
+              onClick={onDetach}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
+              ↗
+            </div>
+          )}
+          <div
+            className="wa-tbtn"
+            title="Windowshade"
+            onClick={() => setIsShaded(!isShaded)}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            ▢
+          </div>
+          <div
+            className="wa-tbtn text-red-300"
+            title="Close"
+            onClick={onClose}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            ×
+          </div>
         </div>
       </div>
 
